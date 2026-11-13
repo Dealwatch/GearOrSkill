@@ -178,6 +178,8 @@ def build(sim, today):
             ",".join(classes[c] for c in item.get("classAllowlist") or [] if c in classes) or "-",
             sparse(item_stats), item["name"], source_text(source or (item.get("sources") or [None])[0], db, professions),
             ",".join(str(s) for s in item.get("randomSuffixOptions") or []) or "-",
+            # Weapon damage per second with a caster suffix ("of Magic"): the game lowers it.
+            "%g" % round((scaling.get("reducedCasterWeaponDamage") or {}).get("unroundedDps") or 0, 1),
         ]
         items[item["id"]] = "^".join(str(f).replace("^", " ") for f in fields)
         is_candidate = (
@@ -229,6 +231,8 @@ def build(sim, today):
     for suffix in sorted(main["randomSuffixes"], key=lambda s: s["id"]):
         out.append("\t\t[%d] = %s," % (suffix["id"], lua_string(suffix["name"])))
     out.append("\t},")
+    out.append("\tcasterSuffixes = { %s }," % ", ".join(
+        "[%d] = true" % s["id"] for s in sorted(main["randomSuffixes"], key=lambda s: s["id"]) if s.get("reducedCasterDps")))
     out.append("\tsuffixed = {")
     for slot in sorted(suffixed):
         out.append("\t\t[%d] = { %s }," % (slot, ", ".join(str(i) for i in sorted(suffixed[slot]))))

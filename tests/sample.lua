@@ -3,8 +3,8 @@
 return function(Stub, ns)
 	local S = Stub.state
 	local ids = {}
-	for id, raw in pairs(ns.Data.items) do
-		local name = raw:match("%^([^%^]+)%^[^%^]+%^[^%^]+$") -- third field from the end
+	for id in pairs(ns.Data.items) do
+		local name = ns.Item(id).name
 		ids[name] = ids[name] or id
 	end
 	local function link(name, enchant, suffix)

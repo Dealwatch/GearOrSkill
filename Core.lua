@@ -50,6 +50,7 @@ function ns.Item(id)
 		id = id, type = tonumber(f[1]), armor = tonumber(f[2]), weapon = tonumber(f[3]), hand = tonumber(f[4]),
 		ranged = tonumber(f[5]), reqLvl = tonumber(f[6]), ilvl = tonumber(f[7]), dps = tonumber(f[8]), rpp = tonumber(f[9]),
 		classes = f[10], stats = parseSparse(f[11]), name = f[12], source = f[13], suffixes = f[14],
+		casterDps = tonumber(f[15]),
 	}
 end
 
@@ -86,7 +87,11 @@ local suffixStats = {} -- parsed suffix allocations, kept because the shop list 
 function ns.ItemScore(item, profile, slot, enchant, suffix)
 	local total = weighted(item.stats, profile)
 	local dpsWeight = profile[DPS_WEIGHT[slot]]
-	if dpsWeight then total = total + dpsWeight * item.dps end
+	if dpsWeight then
+		-- A caster suffix ("of Magic") trades weapon damage for spell power: the game lowers the damage.
+		local lowered = suffix and Data.casterSuffixes[suffix] and item.casterDps > 0
+		total = total + dpsWeight * (lowered and item.casterDps or item.dps)
+	end
 	if suffix and item.rpp > 0 then
 		suffixStats[suffix] = suffixStats[suffix] or parseSparse(Data.suffixes[suffix] or "")
 		total = total + weighted(suffixStats[suffix], profile, item.rpp / 10000)

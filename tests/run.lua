@@ -39,6 +39,21 @@ eq(ns.ItemScore(axe, { w = {}, mh = 2 }, 17), 0, "and not in the off hand withou
 local total, slots, unknown = ns.GearScore({ [1] = "|Hitem:18490::::::::60|h[Insightful Hood]|h", [2] = "|Hitem:999999999:0|h[Mystery]|h" }, { w = { [3] = 1 } })
 eq(total, 15, "gear total"); eq(unknown, 1, "items missing from the database"); eq(slots[2].name, "Mystery", "name from link")
 
+case("a caster suffix lowers the weapon damage, as in game")
+local battering, magic = ns.Item(3198), 12918
+eq(ns.Data.suffixNames[magic], "of Magic", "suffix name"); eq(battering.dps, 15.3, "normal damage per second")
+eq(battering.casterDps, 11.4, "damage per second with a caster suffix (the game shows 11.3)")
+local dpsOnly = { w = {}, mh = 1 }
+eq(ns.ItemScore(battering, dpsOnly, 16, nil, magic), 11.4, "scored with the lowered damage")
+eq(ns.ItemScore(battering, dpsOnly, 16, nil, 12721), 15.3, "a physical suffix keeps the normal damage")
+local enhancement = ns.Data.profiles.SHAMAN[2]
+local greathammer
+for id, raw in pairs(ns.Data.items) do
+	if raw:find("^Ironforge Greathammer^", 1, true) then greathammer = ns.Item(id) end
+end
+assert(ns.ItemScore(battering, enhancement, 16, nil, magic) < ns.ItemScore(greathammer, enhancement, 16),
+	"for Enhancement, Battering Hammer of Magic is worse than Ironforge Greathammer")
+
 case("upgrade suggestions respect class, level and availability")
 local profile = ns.Profile()
 eq(profile.name, "Elemental: Testing", "default profile is the first of the class")

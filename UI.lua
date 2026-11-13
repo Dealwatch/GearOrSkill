@@ -409,7 +409,7 @@ function draw.Shop()
 		local y = note(30, "Auctionator knows no price for anything better than your gear.", C.text, GameFontHighlight)
 		return note(y + 2, "Open the auction house, let Auctionator scan, then look again.", C.dim, GameFontHighlight)
 	end
-	text(0, 24, INNER, shopByValue and "Sorted by value for money. Click to sort by gain." or "Sorted by gain. Click to sort by value for money.", C.dim, "LEFT", GameFontDisableSmall)
+	text(0, 24, INNER, "Rated for " .. profile.name .. ". " .. (shopByValue and "Sorted by value for money. Click to sort by gain." or "Sorted by gain. Click to sort by value for money."), C.dim, "LEFT", GameFontDisableSmall)
 	click(0, 20, INNER, 18, function()
 		shopByValue = not shopByValue
 		Refresh()
