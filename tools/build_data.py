@@ -180,6 +180,8 @@ def build(sim, today):
             ",".join(str(s) for s in item.get("randomSuffixOptions") or []) or "-",
             # Weapon damage per second with a caster suffix ("of Magic"): the game lowers it.
             "%g" % round((scaling.get("reducedCasterWeaponDamage") or {}).get("unroundedDps") or 0, 1),
+            # Whether the item has an effect (proc, use, aura) on top of its stats.
+            1 if item.get("itemEffects") else 0,
         ]
         items[item["id"]] = "^".join(str(f).replace("^", " ") for f in fields)
         is_candidate = (

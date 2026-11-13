@@ -27,12 +27,15 @@ WowUp then updates the addon by itself whenever a new release appears. WowUp 2.2
 
 Stat weights, item stats, item sources and class equipment rules are generated from the open-source simulator [wowsims/forever](https://github.com/wowsims/forever). A daily job rebuilds `Data.lua` from it and publishes a new release only when something changed, so the addon follows the simulator by about a day. New classes and specs appear by themselves once wowsims publishes weights for them.
 
+Weapon effects (procs, use effects) are not in the weights. Where the simulator plays an effect, the daily job measures what it is worth (`Effects.lua`): the real weapon against a plain twin that is given the same stats and damage. Weapons whose effect the simulator does not play yet are marked with a star in the window and measured again every week, so they get a value once wowsims implements them. The first measurement of all weapons takes several daily runs.
+
 The same job runs the simulator to calibrate the gear estimate (`Calibration.lua`): it takes armor off a reference character and measures how much damage is lost per point of gear score. Each calibration is checked against other gear combinations and dropped if it misses the simulator by more than two percentage points.
 
 ## Known limits
 
 - Stat weights come from wowsims where it publishes them: currently Druid, Paladin, Priest, Rogue, Shaman and Warrior. For Hunters, where wowsims has a simulator but no published weights, the daily job measures them with that simulator; they are marked as measured in the window and give way by themselves once wowsims publishes its own. Mage and Warlock get the Fight tab only.
 - Weights are measured for level 60. Below that they are a rough guide.
+- Effects are rated for weapons only, and only for profiles with a reference character in the simulator (currently Shaman, damage Priest and Hunter) and for effects the simulator plays, which today is mostly high-level weapons. Everything else with an effect carries a star: its gain covers stats and weapon damage only. Set bonuses are not rated.
 - The gear difference is an estimate, not a simulation of both players. It is calibrated with the simulator at level 60 where wowsims ships a reference character (currently Shaman and damage Priest); elsewhere it is a rougher estimate from the character sheet. It ignores talents, buffs, set bonuses and item effects, and the calibration assumes a raid-buffed character.
 - Upgrade suggestions leave out trinkets and off-hand items. They hide items the game client does not have, items of a later simulator phase, drops from raids that are not open yet (opening dates are in `tools/build_data.py`) and other items above item level 66. Some rewards that cannot be obtained yet may still appear.
 - What a character can use is taken from the game's own tooltip: an item it prints in red (weapon or armor type not learned, level, class) is not suggested. Mail and plate are also held back until level 40 unless the client reports the armor skill as known.
@@ -72,6 +75,12 @@ Measure weights for classes without published ones (a few minutes):
 
 ```bash
 python3 tools/measure_weights.py /path/to/wowsims-forever /path/to/wowsims-forever/bin/wowsimcli
+```
+
+Measure weapon effects (keeps earlier results and handles 400 weapons per run; `--all` starts afresh):
+
+```bash
+python3 tools/measure_effects.py /path/to/wowsims-forever /path/to/wowsims-forever/bin/wowsimcli
 ```
 
 Render the window to HTML pages for a visual check (needs the Python package `lupa`):

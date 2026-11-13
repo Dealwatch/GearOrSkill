@@ -77,7 +77,8 @@ def pair(profiles, builds):
 
 
 def calibrate(cli, score, profile, path):
-    """Returns (total value, reference links by slot), or None when the build cannot be used."""
+    """Returns (total value, reference links by slot, damage per point of gear score), or None
+    when the build cannot be used."""
     build = json.loads(path.read_text())
     player = build.get("player", {})
     items = player.get("equipment", {}).get("items")
@@ -105,6 +106,7 @@ def calibrate(cli, score, profile, path):
     if dps <= 0 or lost_dps <= 0 or lost_value <= 0:
         return None  # a healer, or a build the simulator does not play
     total = round(dps * lost_value / lost_dps / ROUND_TO) * ROUND_TO
+    per_point = float("%.2g" % (lost_dps / lost_value))  # two digits: steady against daily simulator ripples
     base = total - value
     for group in HELD_OUT:
         group_dps, group_value = without(group)
@@ -113,7 +115,7 @@ def calibrate(cli, score, profile, path):
             print("%s: estimate %.1f%% vs simulator %.1f%% without slots %s, left uncalibrated"
                   % (profile["name"], estimated, simulated, group), file=sys.stderr)
             return None
-    return total, links
+    return total, links, per_point
 
 
 def addon_scorer():
@@ -144,9 +146,9 @@ def main():
             for profile, path in pair(in_spec, sorted(spec_dir.glob("builds/*.build.json"))):
                 result = calibrate(cli, scorer(cls, profile["name"]), profile, path)
                 if result:
-                    total, links = result
+                    total, links, per_point = result
                     ref = ", ".join('[%d] = "%s"' % kv for kv in sorted(links.items()))
-                    lines.append("\t\t[%s] = { total = %d, ref = { %s } }," % (lua_string(profile["name"]), total, ref))
+                    lines.append("\t\t[%s] = { total = %d, per = %g, ref = { %s } }," % (lua_string(profile["name"]), total, per_point, ref))
                     done.append("%s %s = %d" % (cls, profile["name"], total))
         if lines:
             out += ["\t%s = {" % cls] + lines + ["\t},"]

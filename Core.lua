@@ -26,6 +26,16 @@ local DPS_WEIGHT = { [16] = "mh", [17] = "oh", [18] = "rg" }
 local TWO_HAND = 4
 local HEAVY_ARMOR = { HUNTER = 3, SHAMAN = 3, WARRIOR = 4, PALADIN = 4 }
 
+-- What a weapon's effect is worth was measured with the simulator per weight profile
+-- (Effects.lua); hang each table onto its profile.
+for _, profiles in ipairs({ Data.profiles, ns.Measured or {} }) do
+	for class, list in pairs(profiles) do
+		for _, profile in ipairs(list) do
+			profile.effects = ns.Effects and ns.Effects[class] and ns.Effects[class][profile.name]
+		end
+	end
+end
+
 ns.gearCache = {} -- guid -> { links = {slot -> link}, time = seconds }
 ns.lastFight = nil
 
@@ -50,7 +60,7 @@ function ns.Item(id)
 		id = id, type = tonumber(f[1]), armor = tonumber(f[2]), weapon = tonumber(f[3]), hand = tonumber(f[4]),
 		ranged = tonumber(f[5]), reqLvl = tonumber(f[6]), ilvl = tonumber(f[7]), dps = tonumber(f[8]), rpp = tonumber(f[9]),
 		classes = f[10], stats = parseSparse(f[11]), name = f[12], source = f[13], suffixes = f[14],
-		casterDps = tonumber(f[15]),
+		casterDps = tonumber(f[15]), effect = f[16] == "1",
 	}
 end
 
@@ -99,7 +109,14 @@ function ns.ItemScore(item, profile, slot, enchant, suffix)
 	if enchant and Data.enchants[enchant] then
 		total = total + weighted(parseSparse(Data.enchants[enchant]), profile)
 	end
+	if item.effect and profile.effects then total = total + (profile.effects[item.id] or 0) end
 	return total
+end
+
+-- Whether an item has an effect (proc, use) that the rating does not count: the simulator
+-- does not play it yet, or the profile has no reference character to measure it with.
+function ns.Unrated(item, profile)
+	return item.effect and not (profile.effects ~= nil and (profile.effects[item.id] or 0) > 0)
 end
 
 -- Reads the item links of a unit. Returns slot -> link, or nil when the game locks them.
@@ -127,6 +144,7 @@ function ns.GearScore(links, profile)
 				if suffix and not ("," .. item.suffixes .. ","):find("," .. suffix .. ",", 1, true) then suffix = nil end
 				entry.score = ns.ItemScore(item, profile, slot, enchant, suffix)
 				entry.hand = item.hand
+				entry.unrated = ns.Unrated(item, profile)
 			else
 				unknown = unknown + 1
 			end
@@ -253,6 +271,7 @@ function ns.Upgrades(links, class, level, profile)
 			if ns.CanUse(entry.item.id) == true then
 				results[#results + 1] = {
 					slot = slot, equipped = equipped[slot] and equipped[slot].name or "empty", item = entry.item, gain = entry.gain,
+					equippedUnrated = equipped[slot] ~= nil and equipped[slot].unrated, unrated = ns.Unrated(entry.item, profile),
 					seen = GearOrSkillSeen ~= nil and GearOrSkillSeen[entry.item.id] == true,
 				}
 				break
@@ -291,7 +310,7 @@ end
 
 -- Upgrades Auctionator has seen at the auction house.
 -- byValue: order by gain per copper lost instead of by gain.
--- Each row: slot, id, name, search (text to look for), gain, price, old (price older than a few
+-- Each row: slot, id, name, search (text to look for), gain, unrated (has an effect that is not counted), price, old (price older than a few
 -- days), loss (the net cost: price minus what a vendor pays back, nil if unknown) and, for items with a
 -- random suffix, upTo = true and suffix = the name of the best one ("of the Eagle"): the gain is
 -- that suffix's and the price that of the cheapest one on sale, since Auctionator's stored
@@ -304,7 +323,7 @@ function ns.ShopList(links, class, level, profile, byValue)
 		if not copper then return end
 		rows[#rows + 1] = {
 			slot = slot, id = item.id, name = item.name, search = item.name, gain = gain, price = copper,
-			upTo = suffix ~= nil, suffix = suffix and Data.suffixNames[suffix],
+			upTo = suffix ~= nil, suffix = suffix and Data.suffixNames[suffix], unrated = ns.Unrated(item, profile),
 			old = age ~= nil and age > OLD_PRICE_DAYS, loss = sells and math.max(copper - sells, 0) or nil,
 		}
 	end

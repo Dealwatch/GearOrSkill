@@ -1,8 +1,8 @@
 name: Release
 
 # The version in GearOrSkill.toc is the source of truth. A push to main releases that
-# version if it has no release yet. The daily run refreshes Data.lua, Calibration.lua and
-# Measured.lua from wowsims and, only if one changed, raises the patch version, commits and releases.
+# version if it has no release yet. The daily run refreshes Data.lua, Calibration.lua,
+# Measured.lua and Effects.lua from wowsims and, only if one changed, raises the patch version, commits and releases.
 on:
   push:
     branches: [main]
@@ -46,6 +46,7 @@ jobs:
           pip install --quiet lupa
           python3 tools/calibrate.py "$RUNNER_TEMP/wowsims" "$RUNNER_TEMP/wowsims/bin/wowsimcli"
           python3 tools/measure_weights.py "$RUNNER_TEMP/wowsims" "$RUNNER_TEMP/wowsims/bin/wowsimcli"
+          python3 tools/measure_effects.py "$RUNNER_TEMP/wowsims" "$RUNNER_TEMP/wowsims/bin/wowsimcli"
       - name: Test
         run: |
           sudo apt-get update -q

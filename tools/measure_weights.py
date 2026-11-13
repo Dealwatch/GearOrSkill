@@ -71,7 +71,7 @@ def measure(cli, stats, sizes, defaults, build_path):
     def rounded(value):
         return round(value / unit / ROUND_TO) * ROUND_TO
 
-    profile = {"w": {}}
+    profile = {"w": {}, "per": float("%.2g" % unit)}  # damage per second one point of weight is worth
     for name in STATS:
         if rounded(raw[name]) >= MIN_WEIGHT:
             profile["w"][stats["Stat" + name]] = rounded(raw[name])
@@ -104,7 +104,8 @@ def main():
                 if profile:
                     weights = ", ".join("[%d] = %g" % kv for kv in sorted(profile["w"].items()))
                     extra = "".join(", %s = %g" % (key, profile[key]) for key in WEAPONS if key in profile)
-                    lines.append("\t\t{ name = %s, measured = true, w = { %s }%s }," % (lua_string(title(build_path.stem)), weights, extra))
+                    lines.append("\t\t{ name = %s, measured = true, per = %g, w = { %s }%s }," % (
+                        lua_string(title(build_path.stem)), profile["per"], weights, extra))
         assert lines, "no reference character of %s could be measured" % cls
         out += ["\t%s = {" % cls.upper()] + lines + ["\t},"]
         done.append("%s: %d profiles" % (cls, len(lines)))

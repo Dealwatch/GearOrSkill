@@ -17,6 +17,7 @@ local C = {
 local tab, selected = "Me", nil -- selected: guid of the player shown in the Fight tab
 local shopByValue, shopNote = false, nil -- Shop tab: sort order, and the answer to the last search
 local draw = {}
+local UNRATED_NOTE = "* has an effect (a proc or a use) that the rating does not count; the gain covers stats and weapon damage only."
 
 local main = CreateFrame("Frame", "GearOrSkillFrame", UIParent)
 main:SetSize(W, H)
@@ -218,13 +219,14 @@ function draw.Me()
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 20
 	local upgrades = ns.Upgrades(links, class, level, profile)
-	local anySeen = false
+	local anySeen, anyUnrated = false, false
 	for i = 1, math.min(MAX_UPGRADES, #upgrades) do
 		local u = upgrades[i]
+		anyUnrated = anyUnrated or u.unrated or u.equippedUnrated
 		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 34, C.stripe) end
 		text(0, y, 70, ns.SLOT_NAME[u.slot])
-		text(74, y, 146, u.equipped, C.dim)
-		text(224, y, 230, u.item.name)
+		text(74, y, 146, u.equipped .. (u.equippedUnrated and " *" or ""), C.dim)
+		text(224, y, 230, u.item.name .. (u.unrated and " *" or ""))
 		text(224, y + 15, 230, u.item.source, C.dim, "LEFT", GameFontDisableSmall)
 		text(INNER - 50, y, 50, "+" .. number(u.gain), C.ok, "RIGHT")
 		if u.seen then
@@ -241,6 +243,7 @@ function draw.Me()
 	if profile.measured then
 		notes[1] = "Weights: measured by GearOrSkill with the wowsims simulator, for level 60. wowsims has not published its own for this class yet. Items: wowsims, data of " .. Data.built .. "."
 	end
+	if anyUnrated then notes[#notes + 1] = UNRATED_NOTE end
 	if anySeen then notes[#notes + 1] = "seen: a player you inspected wears it, so it can be obtained." end
 	if unknown > 0 then notes[#notes + 1] = unknown .. " equipped item(s) are not in the database and count as zero." end
 	y = y + 8
@@ -422,17 +425,18 @@ function draw.Shop()
 	text(424, y, 84, "Net cost", C.dim, "RIGHT")
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 20
-	local shown, anyOld, anyUpTo = {}, false, false
+	local shown, anyOld, anyUpTo, anyUnrated = {}, false, false, false
 	for i = 1, math.min(MAX_SHOP, #rows) do
 		local row = rows[i]
 		shown[i] = row
-		anyOld, anyUpTo = anyOld or row.old, anyUpTo or row.upTo
+		anyOld, anyUpTo, anyUnrated = anyOld or row.old, anyUpTo or row.upTo, anyUnrated or row.unrated
 		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 30, C.stripe) end
 		text(0, y, 70, ns.SLOT_NAME[row.slot])
-		text(74, y, 196, row.name)
+		text(74, y, 196, row.name .. (row.unrated and " *" or ""))
 		if row.upTo then text(74, y + 14, 196, "best as \"" .. row.suffix .. "\"", C.dim, "LEFT", GameFontDisableSmall) end
 		text(274, y, 70, (row.upTo and "up to +" or "+") .. number(row.gain), C.ok, "RIGHT")
-		text(350, y, 72, money(row.price) .. (row.old and " *" or ""), C.text, "RIGHT")
+		text(350, y, 72, money(row.price), row.old and C.dim or C.text, "RIGHT")
+		if row.old then text(350, y + 14, 72, "(old)", C.dim, "RIGHT", GameFontDisableSmall) end
 		local lost = not row.loss and "?" or row.loss == 0 and "free" or money(row.loss)
 		text(424, y, 84, lost, not row.loss and C.dim or row.loss == 0 and C.ok or C.text, "RIGHT")
 		y = y + 30
@@ -448,7 +452,8 @@ function draw.Shop()
 	if shopNote then y = note(y, shopNote, C.text, GameFontHighlight) + 4 end
 	local notes = { "Net cost: the price minus what a vendor pays you when you sell the item on. ? means not loaded yet." }
 	if anyUpTo then notes[#notes + 1] = "up to: the gain with the suffix named under the item; other suffixes are worth less to you. The price is that of the cheapest suffix on sale, so pick the right one in Auctionator." end
-	if anyOld then notes[#notes + 1] = "* the price is older than three days." end
+	if anyUnrated then notes[#notes + 1] = UNRATED_NOTE end
+	if anyOld then notes[#notes + 1] = "(old) the price is older than three days." end
 	for _, line in ipairs(notes) do y = note(y, line) end
 	return y
 end

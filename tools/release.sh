@@ -9,14 +9,14 @@ toc=GearOrSkill.toc
 version=$(sed -n 's/^## Version: //p' "$toc")
 notes="See the README for what the addon does and its current limits."
 
-if ! git diff --quiet -- Data.lua Calibration.lua Measured.lua; then
+if ! git diff --quiet -- Data.lua Calibration.lua Measured.lua Effects.lua; then
 	IFS=. read -r major minor patch <<<"$version"
 	version="$major.$minor.$((patch + 1))"
 	sed -i "s/^## Version: .*/## Version: $version/" "$toc"
-	notes="Data refresh from https://github.com/wowsims/forever (stat weights, items, calibration, measured weights)."
+	notes="Data refresh from https://github.com/wowsims/forever (stat weights, items, calibration, measured weights and effects)."
 	git config user.name "github-actions[bot]"
 	git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-	git commit --quiet -m "Update data from wowsims, version $version" Data.lua Calibration.lua Measured.lua "$toc"
+	git commit --quiet -m "Update data from wowsims, version $version" Data.lua Calibration.lua Measured.lua Effects.lua "$toc"
 	git push --quiet origin "HEAD:${GITHUB_REF_NAME}"
 fi
 
@@ -29,7 +29,7 @@ fi
 interface=$(sed -n 's/^## Interface: //p' "$toc")
 out=$(mktemp -d)
 mkdir "$out/GearOrSkill"
-cp "$toc" Data.lua Calibration.lua Measured.lua Core.lua UI.lua Probe.lua "$out/GearOrSkill/"
+cp "$toc" Data.lua Calibration.lua Measured.lua Effects.lua Core.lua UI.lua Probe.lua "$out/GearOrSkill/"
 # WowUp picks the zip for the Forever client by the "-forever" suffix or by release.json.
 zip="GearOrSkill-$tag-forever.zip"
 (cd "$out" && zip -qr "$zip" GearOrSkill)

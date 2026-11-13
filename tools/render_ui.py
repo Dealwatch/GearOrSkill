@@ -16,7 +16,7 @@ import lupa.lua51 as lupa  # the game runs Lua 5.1
 
 SETUP = """
 local Stub = dofile("tests/wowstub.lua")
-local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Measured.lua", "Core.lua", "UI.lua", "Probe.lua" })
+local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Measured.lua", "Effects.lua", "Core.lua", "UI.lua", "Probe.lua" })
 dofile("tests/sample.lua")(Stub, ns)
 GearOrSkillDB = { profile = 2 }
 Stub.Fire("PLAYER_REGEN_ENABLED")

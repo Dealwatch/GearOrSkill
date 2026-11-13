@@ -1,6 +1,6 @@
 -- Test suite. Run from the repo root: lua tests/run.lua
 local Stub = dofile("tests/wowstub.lua")
-local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Measured.lua", "Core.lua", "UI.lua", "Probe.lua" })
+local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Measured.lua", "Effects.lua", "Core.lua", "UI.lua", "Probe.lua" })
 dofile("tests/sample.lua")(Stub, ns)
 local S = Stub.state
 
@@ -53,6 +53,36 @@ for id, raw in pairs(ns.Data.items) do
 end
 assert(ns.ItemScore(battering, enhancement, 16, nil, magic) < ns.ItemScore(greathammer, enhancement, 16),
 	"for Enhancement, Battering Hammer of Magic is worse than Ironforge Greathammer")
+
+case("weapon effects: counted where the simulator measured them, marked where not")
+local sulfuras
+for id, raw in pairs(ns.Data.items) do
+	if raw:find("^Sulfuras, Hand of Ragnaros^", 1, true) then sulfuras = ns.Item(id) end
+end
+eq(sulfuras.effect, true, "the database knows the item has an effect"); eq(battering.effect, false, "and which items have none")
+local measured = enhancement.effects
+enhancement.effects = nil
+local plain = ns.ItemScore(sulfuras, enhancement, 16)
+eq(ns.Unrated(sulfuras, enhancement), true, "without a measurement the effect is not rated")
+enhancement.effects = { [sulfuras.id] = 41, [greathammer.id] = 0 }
+eq(ns.ItemScore(sulfuras, enhancement, 16), plain + 41, "a measured effect adds its worth")
+eq(ns.Unrated(sulfuras, enhancement), false, "and is no longer marked")
+eq(ns.Unrated(greathammer, enhancement), true, "an effect the simulator does not play stays marked")
+eq(ns.Unrated(battering, enhancement), false, "an item without an effect is never marked")
+GearOrSkillDB = { profile = 2 }
+local wearing = { [16] = Stub.link("Ironforge Greathammer") }
+local _, wornSlot = ns.GearScore(wearing, enhancement)
+eq(wornSlot[16].unrated, true, "the equipped weapon is marked too")
+S.gear.player, S.level = wearing, 19
+SlashCmdList.GEARORSKILL("")
+ns.ShowTab("Me")
+shows("Ironforge Greathammer *"); shows("* has an effect (a proc or a use) that the rating does not count")
+SlashCmdList.GEARORSKILL("")
+enhancement.effects = measured
+dofile("tests/sample.lua")(Stub, ns)
+GearOrSkillDB = nil
+Stub.RunTimers() -- opening the window asked to inspect the group; let that run out
+Stub.inspected = nil
 
 case("upgrade suggestions respect class, level and availability")
 local profile = ns.Profile()
