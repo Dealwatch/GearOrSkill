@@ -50,6 +50,18 @@ def lua_string(text):
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def nearly_same(old, new, step):
+    """True if two generated files differ only by numbers within one rounding step or 2 %.
+
+    Simulated values wobble by a step from run to run; that must not count as new data.
+    """
+    number = r"-?\d+(?:\.\d+)?"
+    if re.sub(number, "#", old) != re.sub(number, "#", new):
+        return False
+    pairs = zip(re.findall(number, old), re.findall(number, new))
+    return all(abs(float(a) - float(b)) <= max(step, 0.02 * abs(float(a))) + 1e-9 for a, b in pairs)
+
+
 def sparse(values):
     """{stat index: value} as "index:value,..."; "-" when empty."""
     pairs = sorted((int(k), v) for k, v in values.items() if v)

@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from build_data import enum, lua_string, read_profiles
+from build_data import enum, lua_string, nearly_same, read_profiles
 from calibrate import simulate
 
 MEASURED_CLASSES = ["hunter"]
@@ -35,6 +35,7 @@ WEAPONS = {"mh": 0, "oh": 1, "rg": 2}  # addon key -> index of the simulator's w
 # Weights move a little with every simulator change. Steps of 0.05 keep those ripples from
 # causing a release each day.
 ROUND_TO = 0.05
+MIN_WEIGHT = 0.1  # anything smaller is noise and would come and go between runs
 
 
 def parse(cli, path):
@@ -72,11 +73,11 @@ def measure(cli, stats, sizes, defaults, build_path):
 
     profile = {"w": {}}
     for name in STATS:
-        if rounded(raw[name]) > 0:
+        if rounded(raw[name]) >= MIN_WEIGHT:
             profile["w"][stats["Stat" + name]] = rounded(raw[name])
     for key, index in WEAPONS.items():
         weight = rounded(gain("pseudoStats", index, WEAPON_STEP))
-        if weight > 0:
+        if weight >= MIN_WEIGHT:
             profile[key] = weight
     return profile
 
@@ -109,7 +110,7 @@ def main():
         done.append("%s: %d profiles" % (cls, len(lines)))
     out.append("}")
     body = "\n".join(out) + "\n"
-    if target.exists() and target.read_text() == body:
+    if target.exists() and nearly_same(target.read_text(), body, ROUND_TO):
         print("Measured.lua unchanged (%s)" % "; ".join(done))
         return
     target.write_text(body)

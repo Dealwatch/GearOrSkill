@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-from build_data import MAX_ITEM_LEVEL, obtainable_source  # noqa: E402
+from build_data import MAX_ITEM_LEVEL, nearly_same, obtainable_source  # noqa: E402
 
 ZONES = {1: "Stratholme", 2: "Onyxia's Lair", 3: "Naxxramas"}
 dungeon, onyxia, naxx, quest = {"drop": {"zoneId": 1}}, {"drop": {"zoneId": 2}}, {"drop": {"zoneId": 3}}, {"quest": {"name": "x"}}
@@ -22,4 +22,9 @@ assert check([naxx, dungeon]) is dungeon, "the first obtainable source wins"
 assert check([dungeon], item_phase=2) is None, "items of a later phase are hidden"
 assert check([dungeon], item_phase=2, phase=2) is dungeon, "until the simulator reaches that phase"
 assert check([]) is None, "no source, not obtainable"
+line = '{ name = "BM", w = { [1] = %s, [17] = 3.8 }, rg = %s },'
+assert nearly_same(line % ("2.95", "10.25"), line % ("3", "10.4"), 0.05), "one step or 2 % is the same data"
+assert not nearly_same(line % ("2.95", "10.25"), line % ("3.1", "10.25"), 0.05), "three steps is new data"
+assert not nearly_same(line % ("2.95", "10.25"), line.replace("[17] = 3.8", "[18] = 3.8") % ("2.95", "10.25"), 0.05), "another stat is new data"
+assert not nearly_same(line % ("2.95", "10.25"), "", 0.05), "a different shape is new data"
 print("build_data tests passed")
