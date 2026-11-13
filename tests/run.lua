@@ -161,13 +161,43 @@ Stub.Fire("PLAYER_REGEN_ENABLED")
 Stub.RunTimers()
 assert(ns.lastFight, "fight was not recorded after the retry")
 
-case("meter values that stay locked leave the last fight alone")
+case("meter values that stay locked leave the last fight alone and say why")
 ns.lastFight, S.lockedReads = nil, 100
 Stub.Fire("PLAYER_REGEN_ENABLED")
 Stub.RunTimers()
 eq(ns.lastFight, nil, "no fight from locked values")
+eq(ns.fightProblem, "The game kept the damage meter values locked after the fight.", "reason for the window")
 S.lockedReads = 0
+
+case("a failing meter read is reported, an empty current fight falls back to the running total")
+S.meterError = "boom"
+Stub.Fire("PLAYER_REGEN_ENABLED")
+Stub.RunTimers()
+assert(ns.fightProblem:find("Reading the damage meter failed", 1, true) and ns.fightProblem:find("boom", 1, true), ns.fightProblem)
+SlashCmdList.GEARORSKILL("")
+ns.ShowTab("Group"); shows("Reading the damage meter failed")
+S.meterError, S.currentEmpty = nil, true
+Stub.Fire("PLAYER_REGEN_ENABLED")
+Stub.RunTimers()
+eq(ns.fightProblem, nil, "problem cleared by a good read"); eq(ns.lastFight.overall, true, "running total used")
+ns.ShowTab("Group"); shows("all fights 1:42")
+S.currentEmpty = nil
 ns.lastFight = fight
+
+case("window: height follows the content, and a drawing error is shown instead of a broken tab")
+ns.ShowTab("Me")
+local _, _, _, _, meHeight = Stub.Dump(GearOrSkillFrame)
+ns.ShowTab("Group")
+local _, _, _, _, groupHeight = Stub.Dump(GearOrSkillFrame)
+assert(groupHeight < meHeight and groupHeight > 150, "group tab should be shorter than the me tab: " .. groupHeight .. " vs " .. meHeight)
+local realCompare = ns.Compare
+ns.Compare = function() error("kaputt") end
+Stub.printed = {}
+ns.ShowTab("Group")
+shows("This tab ran into an error"); has("kaputt")
+ns.Compare = realCompare
+ns.ShowTab("Me")
+SlashCmdList.GEARORSKILL("")
 
 case("window: tabs, profile switch, click through to the spell view")
 SlashCmdList.GEARORSKILL("")

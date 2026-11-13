@@ -20,7 +20,7 @@ local draw = {}
 
 local main = CreateFrame("Frame", "GearOrSkillFrame", UIParent)
 main:SetSize(W, H)
-main:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+main:SetPoint("TOP", UIParent, "TOP", 0, -90) -- anchored at the top: the height follows the content
 main:SetFrameStrata("HIGH")
 main:EnableMouse(true)
 main:SetMovable(true)
@@ -136,12 +136,28 @@ local function classColor(class)
 	return c and { c.r, c.g, c.b } or C.text
 end
 
-local function Refresh()
+local function clear()
 	for kind, pool in pairs(pools) do
 		for i = 1, #pool do pool[i]:Hide() end
 		used[kind] = 0
 	end
-	draw[tab]()
+end
+
+-- Every draw function returns how far down its content reaches; the window is sized to fit.
+local function Refresh()
+	clear()
+	local ok, bottom = pcall(draw[tab])
+	if not ok then
+		-- Show the problem instead of a half-drawn tab; the full text goes to chat for reporting.
+		local problem = tostring(bottom)
+		clear()
+		text(0, 0, INNER, "This tab ran into an error", C.bad, "LEFT", GameFontNormalLarge)
+		text(0, 30, INNER, problem)
+		text(0, 48, INNER, "The full message is in the chat window.", C.dim)
+		print("|cff33ff99GoS|r " .. problem)
+		bottom = 66
+	end
+	main:SetHeight(TOP + 10 + bottom + 14 + PAD)
 end
 
 function draw.Me()
@@ -152,7 +168,7 @@ function draw.Me()
 		text(0, 0, INNER, className .. ", level " .. level, classColor(class), "LEFT", GameFontNormalLarge)
 		text(0, 30, INNER, "wowsims has no stat weights for this class yet.")
 		text(0, 48, INNER, "Gear cannot be rated until it does. The Fight tab still works.", C.dim)
-		return
+		return 66
 	end
 	local links = ns.ReadGear("player") or {}
 	local total, _, unknown = ns.GearScore(links, profile)
@@ -216,25 +232,34 @@ function draw.Me()
 	local notes = { "Weights and items: wowsims, data of " .. Data.built .. ". Weights are measured for level 60." }
 	if anySeen then notes[#notes + 1] = "seen: a player you inspected wears it, so it can be obtained." end
 	if unknown > 0 then notes[#notes + 1] = unknown .. " equipped item(s) are not in the database and count as zero." end
-	y = math.max(y + 6, H - TOP - PAD - 20 - 14 * #notes)
+	y = y + 8
 	for _, line in ipairs(notes) do
 		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
 		y = y + 14
 	end
+	return y
 end
 
 local function fightHeader(fight, left, right)
 	text(0, 0, 250, left, C.text, "LEFT", GameFontNormalLarge)
-	local duration = fight and fight.duration and string.format("%d:%02d", math.floor(fight.duration / 60), math.floor(fight.duration % 60))
-	text(INNER - 270, 3, 270, (duration and ("last fight " .. duration .. ", ") or "") .. right, C.dim, "RIGHT")
+	local duration = fight.duration and string.format("%d:%02d", math.floor(fight.duration / 60), math.floor(fight.duration % 60))
+	local scope = fight.overall and "all fights" or "last fight"
+	text(INNER - 270, 3, 270, scope .. (duration and (" " .. duration) or "") .. ", " .. right, C.dim, "RIGHT")
 end
 
 local function noFight()
 	text(0, 0, INNER, "No fight recorded yet", C.text, "LEFT", GameFontNormalLarge)
 	text(0, 30, INNER, "Fight something in a group. This fills in a few seconds after combat ends.")
+	local y = 48
 	if C_CVar and C_CVar.GetCVarBool("damageMeterEnabled") == false then
-		text(0, 48, INNER, "The built-in damage meter is off. Turn it on in the game options first.", C.bad)
+		text(0, y, INNER, "The built-in damage meter is off. Turn it on in the game options first.", C.bad)
+		y = y + 18
 	end
+	if ns.fightProblem then
+		text(0, y, INNER, ns.fightProblem, C.bad)
+		y = y + 18
+	end
+	return y
 end
 
 function draw.Group()
@@ -295,6 +320,7 @@ function draw.Group()
 		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
 		y = y + 14
 	end
+	return y
 end
 
 function draw.Fight()
@@ -310,7 +336,7 @@ function draw.Fight()
 	if not other then
 		text(0, 0, INNER, "Nobody to compare with", C.text, "LEFT", GameFontNormalLarge)
 		text(0, 30, INNER, "Nobody else of your class played the same way in the last fight.", C.dim)
-		return
+		return 48
 	end
 	local me = fight.me
 	fightHeader(fight, "You vs " .. other.name, "share of total damage")
@@ -361,6 +387,7 @@ function draw.Fight()
 	else
 		text(0, y, INNER, "No spell stands out. You both spread your damage the same way.", C.dim, "LEFT", GameFontDisableSmall)
 	end
+	return y + 14
 end
 
 local function money(copper)
@@ -377,17 +404,17 @@ function draw.Shop()
 	text(INNER - 200, 3, 200, "prices stored by Auctionator", C.dim, "RIGHT")
 	if not profile then
 		text(0, 30, INNER, "wowsims has no stat weights for this class yet, so items cannot be rated.", C.dim)
-		return
+		return 48
 	elseif not ns.Auctionator() then
 		text(0, 30, INNER, "Auctionator is not installed or not turned on.")
 		text(0, 48, INNER, "This tab reads the prices Auctionator has stored. The other tabs work without it.", C.dim)
-		return
+		return 66
 	end
 	local rows = ns.ShopList(ns.ReadGear("player") or {}, class, UnitLevel("player"), profile, shopByValue)
 	if #rows == 0 then
 		text(0, 30, INNER, "Auctionator knows no price for anything better than your gear.")
 		text(0, 48, INNER, "Open the auction house, let Auctionator scan, then look again.", C.dim)
-		return
+		return 66
 	end
 	text(0, 24, INNER, shopByValue and "Sorted by value for money. Click to sort by gain." or "Sorted by gain. Click to sort by value for money.", C.dim, "LEFT", GameFontDisableSmall)
 	click(0, 20, INNER, 18, function()
@@ -424,8 +451,11 @@ function draw.Shop()
 		shopNote = ns.ShopSearch(shown)
 		Refresh()
 	end)
-	if shopNote then text(232, y + 5, INNER - 232, shopNote, C.text) end
 	y = y + 34
+	if shopNote then
+		text(0, y, INNER, shopNote)
+		y = y + 20
+	end
 	local notes = { "Net cost: the price minus what a vendor pays you when you sell the item on. ? means not loaded yet." }
 	if anyUpTo then notes[#notes + 1] = "up to: the gain of the best random suffix. The price is the cheapest suffix on sale, so check before buying." end
 	if anyOld then notes[#notes + 1] = "* the price is older than three days." end
@@ -433,6 +463,7 @@ function draw.Shop()
 		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
 		y = y + 14
 	end
+	return y
 end
 
 local tabs = {}

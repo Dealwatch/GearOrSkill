@@ -204,7 +204,9 @@ C_Spell = { GetSpellName = function(id) return S.spellNames and S.spellNames[id]
 Enum = { DamageMeterType = { DamageDone = 0 }, DamageMeterSessionType = { Overall = 0, Current = 1 } }
 C_DamageMeter = {
 	IsDamageMeterAvailable = function() return true, "" end,
-	GetCombatSessionFromType = function()
+	GetCombatSessionFromType = function(sessionType)
+		if S.meterError then error(S.meterError) end
+		if S.currentEmpty and sessionType == Enum.DamageMeterSessionType.Current then return { combatSources = {} } end
 		local locked = S.lockedReads > 0
 		S.lockedReads = S.lockedReads - 1
 		local sources = {}

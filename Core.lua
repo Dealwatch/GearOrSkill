@@ -87,8 +87,7 @@ function ns.ItemScore(item, profile, slot, enchant, suffix)
 	local total = weighted(item.stats, profile)
 	local dpsWeight = profile[DPS_WEIGHT[slot]]
 	if dpsWeight then total = total + dpsWeight * item.dps end
-	-- Only a suffix this item can roll counts: other link fields may hold the same number.
-	if suffix and item.rpp > 0 and (":" .. item.suffixes:gsub(",", ":") .. ":"):find(":" .. suffix .. ":", 1, true) then
+	if suffix and item.rpp > 0 then
 		suffixStats[suffix] = suffixStats[suffix] or parseSparse(Data.suffixes[suffix] or "")
 		total = total + weighted(suffixStats[suffix], profile, item.rpp / 10000)
 	end
@@ -119,6 +118,8 @@ function ns.GearScore(links, profile)
 			local item = id and ns.Item(id)
 			local entry = { id = id, name = link:match("%[(.-)%]") or (item and item.name) or "?", score = 0 }
 			if item then
+				-- Only a suffix this item can roll counts: other link fields may hold the same number.
+				if suffix and not ("," .. item.suffixes .. ","):find("," .. suffix .. ",", 1, true) then suffix = nil end
 				entry.score = ns.ItemScore(item, profile, slot, enchant, suffix)
 				entry.hand = item.hand
 			else
@@ -367,7 +368,7 @@ local function groupLevels()
 	local levels = {}
 	local prefix, count = "party", GetNumGroupMembers() - 1
 	if IsInRaid() then prefix, count = "raid", GetNumGroupMembers() end
-	for i = 0, count do
+	for i = 0, math.max(count, 0) do
 		local unit = i == 0 and "player" or prefix .. i
 		local guid, level = UnitGUID(unit), UnitLevel(unit)
 		if guid and not isSecret(guid) and not isSecret(level) and type(level) == "number" and level > 0 then
@@ -391,11 +392,8 @@ local function readSource(src, sessionType, meterType)
 	return entry, false
 end
 
--- Reads the last fight from the built-in damage meter.
--- Returns a fight table, or nil plus true while the game still locks the values.
-function ns.ReadFight()
-	if not C_DamageMeter then return nil, false end
-	local sessionType, meterType = Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.DamageDone
+local function readSession(sessionType)
+	local meterType = Enum.DamageMeterType.DamageDone
 	local session = C_DamageMeter.GetCombatSessionFromType(sessionType, meterType)
 	local sources = type(session) == "table" and session.combatSources
 	if type(sources) ~= "table" or #sources == 0 then return nil, false end
@@ -413,16 +411,36 @@ function ns.ReadFight()
 	return fight, false
 end
 
+-- Reads the last fight from the built-in damage meter.
+-- Returns a fight table, or nil plus true while the game still locks the values.
+function ns.ReadFight()
+	if not C_DamageMeter then return nil, false end
+	local fight, locked = readSession(Enum.DamageMeterSessionType.Current)
+	if fight or locked then return fight, locked end
+	-- ponytail: in case the meter empties the current fight when combat ends, fall back to its
+	-- running total. That compares players across all fights since the meter was reset.
+	fight, locked = readSession(Enum.DamageMeterSessionType.Overall)
+	if fight then fight.overall = true end
+	return fight, locked
+end
+
+-- ns.fightProblem says why no fight could be read, for the window to show.
 local function afterFight(attempt)
 	if InCombatLockdown() then return end
 	local ok, fight, locked = pcall(ns.ReadFight)
-	if not ok then return end
-	if locked and attempt < METER_ATTEMPTS then
+	if not ok then
+		ns.fightProblem = "Reading the damage meter failed: " .. tostring(fight)
+	elseif locked and attempt < METER_ATTEMPTS then
 		C_Timer.After(METER_DELAY, function() afterFight(attempt + 1) end)
+		return
+	elseif locked then
+		ns.fightProblem = "The game kept the damage meter values locked after the fight."
 	elseif fight and fight.me then
-		ns.lastFight = fight
+		ns.lastFight, ns.fightProblem = fight, nil
 		if ns.OnFight then ns.OnFight(fight) end
+		return
 	end
+	if ns.OnGear then ns.OnGear() end -- redraw, so the reason shows
 end
 
 -- Inspecting: one group member of your class at a time, never in combat.
@@ -452,7 +470,8 @@ function ns.QueueInspects()
 	queue = {}
 	for i = 1, count do
 		local unit = prefix .. i
-		if UnitExists(unit) and not UnitIsUnit(unit, "player") and select(2, UnitClass(unit)) == myClass then
+		local _, class = UnitClass(unit)
+		if UnitExists(unit) and not UnitIsUnit(unit, "player") and not isSecret(class) and class == myClass then
 			local guid = UnitGUID(unit)
 			local cached = not isSecret(guid) and ns.gearCache[guid]
 			if not cached or GetTime() - cached.time > INSPECT_MAX_AGE then queue[#queue + 1] = unit end

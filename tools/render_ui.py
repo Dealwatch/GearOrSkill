@@ -32,10 +32,19 @@ VIEWS = [
     ("group", 'ns.ShowTab("Group")'),
     ("fight", 'ns.ShowTab("Fight")'),
     ("shop", 'ns.ShowTab("Shop")'),
+    ("shop-searched", 'for _, b in ipairs(Stub.Buttons(GearOrSkillFrame)) do if b.w == 220 then b.scripts.OnClick() end end'),
     ("me-level-20", 'Stub.state.level = 20; ns.ShowTab("Me")'),
     ("group-level-20", 'Stub.state.units.party1.level = 23; Stub.Fire("PLAYER_REGEN_ENABLED"); Stub.RunTimers(); ns.ShowTab("Group")'),
     ("shop-level-20", 'ns.ShowTab("Shop")'),
-    ("no-fight", 'Stub.state.level = 60; ns.lastFight = nil; ns.ShowTab("Group")'),
+    ("shop-no-prices", 'Stub.auctionPrice = function() end; ns.ShowTab("Shop")'),
+    ("shop-no-auctionator", 'Auctionator = nil; ns.ShowTab("Shop")'),
+    ("group-nobody", 'Stub.state.level = 60; Stub.state.units.party1.level = nil; table.remove(Stub.state.sources, 2); '
+                     'Stub.Fire("PLAYER_REGEN_ENABLED"); Stub.RunTimers(); ns.ShowTab("Group")'),
+    ("fight-nobody", 'ns.ShowTab("Fight")'),
+    ("no-fight", 'ns.lastFight = nil; ns.ShowTab("Group")'),
+    ("meter-problem", 'ns.fightProblem = "The game kept the damage meter values locked after the fight."; ns.ShowTab("Group")'),
+    ("me-no-weights", 'Stub.state.units.player.class, Stub.state.units.player.className = "MAGE", "Mage"; ns.ShowTab("Me")'),
+    ("shop-no-weights", 'ns.ShowTab("Shop")'),
 ]
 
 PAGE = """<!doctype html><meta charset="utf-8"><title>GearOrSkill %s</title>
