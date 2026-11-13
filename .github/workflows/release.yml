@@ -1,0 +1,35 @@
+name: Release
+
+# A pushed tag (v1.2.3) releases that tag. The daily run refreshes Data.lua from
+# wowsims and, only if it changed, commits it and releases the next patch version.
+on:
+  push:
+    tags: ["v*"]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refresh data from wowsims
+        if: github.ref_type != 'tag'
+        run: |
+          git clone --quiet --depth 1 https://github.com/wowsims/forever "$RUNNER_TEMP/wowsims"
+          python3 tools/build_data.py "$RUNNER_TEMP/wowsims"
+      - name: Test
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q lua5.1
+          lua5.1 tests/run.lua
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/release.sh

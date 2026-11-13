@@ -1,14 +1,14 @@
--- API probe: answers "what can an addon read in the Forever client?" before we build on it.
--- Usage: /gos (your gear + your target's gear), /gos meter (damage meter), /gos clear.
--- In a group the meter probe also runs by itself after the first fights.
--- Chat shows one verdict per question; the details go to the GearOrSkillProbeLog saved variable.
+-- API probe: answers "what can an addon read in the Forever client?"
+-- Usage: /gos probe (your gear + your target's gear), /gos probe meter (damage meter after a fight),
+-- /gos probe clear. Chat shows one verdict per question; the details go to the
+-- GearOrSkillProbeLog saved variable.
+local _, ns = ...
 
 local MAX_LOG = 500
 local FIRST_SLOT, LAST_SLOT = 1, 19
 local UNSTATTED_SLOTS = 2 -- shirt and tabard never carry stats
 local INSPECT_TIMEOUT = 5
 local METER_DELAY, METER_ATTEMPTS = 3, 3 -- the game unlocks meter values a moment after combat
-local AUTO_RUNS = 3
 
 local PREFIX = "|cff33ff99GoS|r "
 local TAG = {
@@ -19,7 +19,6 @@ local TAG = {
 }
 
 local pendingGUID
-local autoRuns = 0
 
 local function isSecret(v)
 	return issecretvalue ~= nil and issecretvalue(v)
@@ -87,7 +86,7 @@ local function probeGear(unit, who)
 	if secrets > 0 or links == 0 or withStats == 0 then
 		say("blocked", msg .. (secrets > 0 and (", " .. secrets .. " locked") or ""))
 	elseif withStats < links - UNSTATTED_SLOTS then
-		say("partial", msg .. " (item data still loading, run /gos again)")
+		say("partial", msg .. " (item data still loading, run /gos probe again)")
 	else
 		say("ok", msg)
 	end
@@ -197,7 +196,7 @@ probeMeter = function(attempt)
 		return
 	end
 	if InCombatLockdown() then
-		say("info", "Meter: in combat, values are locked. Run /gos meter after the fight")
+		say("info", "Meter: in combat, values are locked. Run /gos probe meter after the fight")
 		return
 	end
 	if attempt == 1 then
@@ -220,31 +219,23 @@ probeMeter = function(attempt)
 	for _, r in ipairs(results) do say(r[1], r[2]) end
 end
 
-local function onEvent(event, guid)
-	if event == "PLAYER_REGEN_ENABLED" then
-		if IsInGroup() and autoRuns < AUTO_RUNS then
-			autoRuns = autoRuns + 1
-			C_Timer.After(METER_DELAY, function() try("Meter", probeMeter, 1) end)
-		end
-	elseif pendingGUID and not isSecret(guid) and guid == pendingGUID then
-		pendingGUID = nil
-		local current = UnitGUID("target")
-		if isSecret(current) or current ~= guid then
-			say("info", "Target changed before the inspect answer arrived, run /gos again")
-			return
-		end
-		try("Target gear", probeGear, "target", "Target " .. show(UnitName("target")))
-		try("Target talents", probeTalents, "target")
+local function onInspectReady(guid)
+	if not pendingGUID or isSecret(guid) or guid ~= pendingGUID then return end
+	pendingGUID = nil
+	local current = UnitGUID("target")
+	if isSecret(current) or current ~= guid then
+		say("info", "Target changed before the inspect answer arrived, run /gos probe again")
+		return
 	end
+	try("Target gear", probeGear, "target", "Target " .. show(UnitName("target")))
+	try("Target talents", probeTalents, "target")
 end
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("INSPECT_READY")
-frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-frame:SetScript("OnEvent", function(_, event, guid) try("Event", onEvent, event, guid) end)
+frame:SetScript("OnEvent", function(_, _, guid) try("Event", onInspectReady, guid) end)
 
-SLASH_GEARORSKILL1 = "/gos"
-SlashCmdList.GEARORSKILL = function(arg)
+function ns.Probe(arg)
 	if arg == "clear" then
 		GearOrSkillProbeLog = {}
 		print(PREFIX .. "log cleared")
