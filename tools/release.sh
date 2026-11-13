@@ -10,6 +10,12 @@ version=$(sed -n 's/^## Version: //p' "$toc")
 notes="See the README for what the addon does and its current limits."
 
 if ! git diff --quiet -- Data.lua Calibration.lua Measured.lua Effects.lua; then
+	# Committing and pushing on its own is for the workflow only. Run by hand with changed
+	# generated files, this once committed under the workflow's name on a developer machine.
+	if [[ -z "${GITHUB_ACTIONS:-}" ]]; then
+		echo "Generated files have uncommitted changes. Commit them first; only the workflow releases them by itself." >&2
+		exit 1
+	fi
 	IFS=. read -r major minor patch <<<"$version"
 	version="$major.$minor.$((patch + 1))"
 	sed -i "s/^## Version: .*/## Version: $version/" "$toc"
