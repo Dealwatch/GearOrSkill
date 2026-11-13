@@ -1,6 +1,6 @@
 -- Test suite. Run from the repo root: lua tests/run.lua
 local Stub = dofile("tests/wowstub.lua")
-local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Core.lua", "UI.lua", "Probe.lua" })
+local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Measured.lua", "Core.lua", "UI.lua", "Probe.lua" })
 dofile("tests/sample.lua")(Stub, ns)
 local S = Stub.state
 
@@ -367,6 +367,29 @@ shows("Searching for ")
 ns.ShowTab("Me")
 SlashCmdList.GEARORSKILL("")
 Auctionator, AuctionHouseFrame = nil, nil
+
+case("a class without published weights uses the measured ones, until wowsims publishes")
+S.units.player.class, S.units.player.className = "HUNTER", "Hunter"
+GearOrSkillDB.profile = nil
+local hunter = ns.Profile()
+eq(hunter.name, "BM", "first measured Hunter profile"); eq(hunter.measured, true, "marked as measured")
+assert(hunter.w[1] > hunter.w[15] and hunter.rg > 1, "agility and ranged weapon damage carry weight for a Hunter")
+local hunterUpgrades = ns.Upgrades({}, "HUNTER", 60, hunter)
+local ranged
+for _, u in ipairs(hunterUpgrades) do
+	assert(u.item.classes == "-" or u.item.classes:find("HUNTER", 1, true), u.item.name .. " is for another class")
+	if u.slot == 18 then ranged = u.item end
+end
+assert(ranged and ns.Data.ranged.HUNTER[ranged.ranged], "a Hunter gets a ranged weapon suggested")
+SlashCmdList.GEARORSKILL("")
+ns.ShowTab("Me")
+shows("BM"); shows("ranged weapon DPS"); shows("measured by GearOrSkill with the wowsims simulator")
+SlashCmdList.GEARORSKILL("")
+ns.Data.profiles.HUNTER = { { name = "From wowsims", w = { [1] = 1 } } }
+eq(ns.Profile().name, "From wowsims", "published weights take over by themselves")
+ns.Data.profiles.HUNTER = nil
+S.units.player.class, S.units.player.className = "SHAMAN", "Shaman"
+GearOrSkillDB.profile = 2
 
 case("probe: gear of player and target")
 S.units.target = S.units.party1

@@ -16,7 +16,7 @@ import lupa.lua51 as lupa  # the game runs Lua 5.1
 
 SETUP = """
 local Stub = dofile("tests/wowstub.lua")
-local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Core.lua", "UI.lua", "Probe.lua" })
+local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Measured.lua", "Core.lua", "UI.lua", "Probe.lua" })
 dofile("tests/sample.lua")(Stub, ns)
 GearOrSkillDB = { profile = 2 }
 Stub.Fire("PLAYER_REGEN_ENABLED")
@@ -45,6 +45,9 @@ VIEWS = [
     ("meter-problem", 'ns.fightProblem = "The game kept the damage meter values locked after the fight."; ns.ShowTab("Group")'),
     ("me-no-weights", 'Stub.state.units.player.class, Stub.state.units.player.className = "MAGE", "Mage"; ns.ShowTab("Me")'),
     ("shop-no-weights", 'ns.ShowTab("Shop")'),
+    ("hunter-me", 'Stub.state.units.player.class, Stub.state.units.player.className = "HUNTER", "Hunter"; '
+                  'GearOrSkillDB.profile = 1; Stub.state.gear.player = {}; Stub.state.level = 19; ns.ShowTab("Me")'),
+    ("hunter-shop", 'Auctionator = Stub.Auctionator; Stub.auctionPrice = function(id) return id % 5 == 0 and 2000 + (id * 37) % 60000 or nil end; ns.ShowTab("Shop")'),
 ]
 
 PAGE = """<!doctype html><meta charset="utf-8"><title>GearOrSkill %s</title>

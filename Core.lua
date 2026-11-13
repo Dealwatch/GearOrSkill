@@ -577,9 +577,11 @@ local function onInspectReady(guid)
 end
 
 -- The weight profile chosen for this character (saved), or the first one of the class.
+-- Weights published by wowsims come first; where it has none, the ones measured with its
+-- simulator (Measured.lua) are used, so a class moves over by itself once wowsims publishes.
 function ns.Profile()
 	local _, class = UnitClass("player")
-	local list = Data.profiles[class]
+	local list = Data.profiles[class] or (ns.Measured and ns.Measured[class])
 	if not list then return nil end
 	GearOrSkillDB = GearOrSkillDB or {}
 	return list[GearOrSkillDB.profile] or list[1], list

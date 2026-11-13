@@ -42,7 +42,7 @@ ROUND_TO = 100
 SLOTS = [1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17, 18]
 
 
-def simulate(cli, build, player):
+def simulate(cli, build, player, iterations=ITERATIONS):
     request = {
         "raid": {
             "parties": [{"players": [player], "buffs": build.get("partyBuffs", {})}],
@@ -50,7 +50,7 @@ def simulate(cli, build, player):
             "debuffs": build.get("debuffs", {}),
         },
         "encounter": build["encounter"],
-        "simOptions": {"iterations": ITERATIONS, "randomSeed": SEED},
+        "simOptions": {"iterations": iterations, "randomSeed": SEED},
     }
     with tempfile.NamedTemporaryFile("w", suffix=".json") as f:
         json.dump(request, f)

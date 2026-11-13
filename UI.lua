@@ -196,14 +196,16 @@ function draw.Me()
 	table.sort(weights, function(a, b) return a[2] > b[2] end)
 	local y, top = 62, weights[1] and weights[1][2] or 1
 	for i = 1, math.min(MAX_WEIGHTS, #weights) do
-		text(0, y, 120, weights[i][1])
-		bar(126, y + 2, INNER - 126 - 46, 9, weights[i][2] / top, C.weight)
+		text(0, y, 150, weights[i][1])
+		bar(156, y + 2, INNER - 156 - 46, 9, weights[i][2] / top, C.weight)
 		text(INNER - 40, y, 40, string.format("%.1f", weights[i][2]), C.text, "RIGHT")
 		y = y + 18
 	end
-	if profile.mh then
-		text(0, y + 2, INNER, "One point of main-hand weapon DPS is worth " .. string.format("%.1f", profile.mh) .. ".", C.dim)
-		y = y + 18
+	for _, weapon in ipairs({ { "mh", "main-hand" }, { "rg", "ranged" } }) do
+		if profile[weapon[1]] then
+			text(0, y + 2, INNER, "One point of " .. weapon[2] .. " weapon DPS is worth " .. string.format("%.1f", profile[weapon[1]]) .. ".", C.dim)
+			y = y + 18
+		end
 	end
 
 	y = y + 12
@@ -236,6 +238,9 @@ function draw.Me()
 		y = y + 20
 	end
 	local notes = { "Weights and items: wowsims, data of " .. Data.built .. ". Weights are measured for level 60." }
+	if profile.measured then
+		notes[1] = "Weights: measured by GearOrSkill with the wowsims simulator, for level 60. wowsims has not published its own for this class yet. Items: wowsims, data of " .. Data.built .. "."
+	end
 	if anySeen then notes[#notes + 1] = "seen: a player you inspected wears it, so it can be obtained." end
 	if unknown > 0 then notes[#notes + 1] = unknown .. " equipped item(s) are not in the database and count as zero." end
 	y = y + 8

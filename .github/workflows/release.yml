@@ -1,8 +1,8 @@
 name: Release
 
 # The version in GearOrSkill.toc is the source of truth. A push to main releases that
-# version if it has no release yet. The daily run refreshes Data.lua and Calibration.lua
-# from wowsims and, only if one changed, raises the patch version, commits and releases.
+# version if it has no release yet. The daily run refreshes Data.lua, Calibration.lua and
+# Measured.lua from wowsims and, only if one changed, raises the patch version, commits and releases.
 on:
   push:
     branches: [main]
@@ -25,8 +25,8 @@ jobs:
         run: |
           git clone --quiet --depth 1 https://github.com/wowsims/forever "$RUNNER_TEMP/wowsims"
           python3 tools/build_data.py "$RUNNER_TEMP/wowsims"
-      # Calibration needs the simulator built from source. If that fails (upstream build
-      # trouble), the committed Calibration.lua stays and the data refresh still goes out.
+      # Calibration and measured weights need the simulator built from source. If that fails
+      # (upstream build trouble), the committed files stay and the data refresh still goes out.
       - name: Set up Go for the simulator
         if: github.event_name != 'push'
         continue-on-error: true
@@ -34,7 +34,7 @@ jobs:
         with:
           go-version-file: ${{ runner.temp }}/wowsims/go.mod
           cache-dependency-path: ${{ runner.temp }}/wowsims/go.sum
-      - name: Calibrate with the simulator
+      - name: Calibrate and measure with the simulator
         if: github.event_name != 'push'
         continue-on-error: true
         run: |
@@ -45,6 +45,7 @@ jobs:
           make -C "$RUNNER_TEMP/wowsims" bin/wowsimcli
           pip install --quiet lupa
           python3 tools/calibrate.py "$RUNNER_TEMP/wowsims" "$RUNNER_TEMP/wowsims/bin/wowsimcli"
+          python3 tools/measure_weights.py "$RUNNER_TEMP/wowsims" "$RUNNER_TEMP/wowsims/bin/wowsimcli"
       - name: Test
         run: |
           sudo apt-get update -q

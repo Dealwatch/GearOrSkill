@@ -31,7 +31,7 @@ The same job runs the simulator to calibrate the gear estimate (`Calibration.lua
 
 ## Known limits
 
-- Stat weights exist only where wowsims publishes them: currently Druid, Paladin, Priest, Rogue, Shaman and Warrior. Other classes get the Fight tab only.
+- Stat weights come from wowsims where it publishes them: currently Druid, Paladin, Priest, Rogue, Shaman and Warrior. For Hunters, where wowsims has a simulator but no published weights, the daily job measures them with that simulator; they are marked as measured in the window and give way by themselves once wowsims publishes its own. Mage and Warlock get the Fight tab only.
 - Weights are measured for level 60. Below that they are a rough guide.
 - The gear difference is an estimate, not a simulation of both players. It is calibrated with the simulator at level 60 where wowsims ships a reference character (currently Shaman and damage Priest); elsewhere it is a rougher estimate from the character sheet. It ignores talents, buffs, set bonuses and item effects, and the calibration assumes a raid-buffed character.
 - Upgrade suggestions leave out trinkets and off-hand items. They hide items the game client does not have, items of a later simulator phase, drops from raids that are not open yet (opening dates are in `tools/build_data.py`) and other items above item level 66. Some rewards that cannot be obtained yet may still appear.
@@ -66,6 +66,12 @@ Recalibrate with a built simulator (`make bin/wowsimcli` in the wowsims checkout
 
 ```bash
 python3 tools/calibrate.py /path/to/wowsims-forever /path/to/wowsims-forever/bin/wowsimcli
+```
+
+Measure weights for classes without published ones (a few minutes):
+
+```bash
+python3 tools/measure_weights.py /path/to/wowsims-forever /path/to/wowsims-forever/bin/wowsimcli
 ```
 
 Render the window to HTML pages for a visual check (needs the Python package `lupa`):
