@@ -80,16 +80,24 @@ local function take(kind, create)
 	return region
 end
 
-local function text(x, y, width, str, color, justify, font)
+local function text(x, y, width, str, color, justify, font, wrap)
 	local fs = take("text", function() return content:CreateFontString(nil, "OVERLAY") end)
 	fs:SetFontObject(font or GameFontHighlight)
 	fs:SetPoint("TOPLEFT", content, "TOPLEFT", x + 12, -(y + 10))
 	fs:SetWidth(width)
 	fs:SetJustifyH(justify or "LEFT")
-	fs:SetWordWrap(false)
+	fs:SetWordWrap(wrap == true)
 	fs:SetText(str)
 	color = color or C.text
 	fs:SetTextColor(color[1], color[2], color[3])
+	return fs
+end
+
+-- A sentence that wraps across the panel instead of being cut off. Returns the y below it.
+-- Small and grey by default, for footnotes.
+local function note(y, str, color, font)
+	local fs = text(0, y, INNER, str, color or C.dim, "LEFT", font or GameFontDisableSmall, true)
+	return y + math.ceil(fs:GetStringHeight()) + 2
 end
 
 -- level: draw order among rectangles (0 backdrop stripes, 1 bar tracks, 2 bar fills).
@@ -152,10 +160,9 @@ local function Refresh()
 		local problem = tostring(bottom)
 		clear()
 		text(0, 0, INNER, "This tab ran into an error", C.bad, "LEFT", GameFontNormalLarge)
-		text(0, 30, INNER, problem)
-		text(0, 48, INNER, "The full message is in the chat window.", C.dim)
+		bottom = note(30, problem, C.text, GameFontHighlight)
+		bottom = note(bottom + 4, "The message is in the chat window too.")
 		print("|cff33ff99GoS|r " .. problem)
-		bottom = 66
 	end
 	main:SetHeight(TOP + 10 + bottom + 14 + PAD)
 end
@@ -166,9 +173,8 @@ function draw.Me()
 	local level = UnitLevel("player")
 	if not profile then
 		text(0, 0, INNER, className .. ", level " .. level, classColor(class), "LEFT", GameFontNormalLarge)
-		text(0, 30, INNER, "wowsims has no stat weights for this class yet.")
-		text(0, 48, INNER, "Gear cannot be rated until it does. The Fight tab still works.", C.dim)
-		return 66
+		local y = note(30, "wowsims has no stat weights for this class yet.", C.text, GameFontHighlight)
+		return note(y + 2, "Gear cannot be rated until it does. The Fight tab still works.", C.dim, GameFontHighlight)
 	end
 	local links = ns.ReadGear("player") or {}
 	local total, _, unknown = ns.GearScore(links, profile)
@@ -204,8 +210,8 @@ function draw.Me()
 	section(y, "Best upgrades for your level")
 	y = y + 18
 	text(0, y, 70, "Slot", C.dim)
-	text(74, y, 170, "Equipped", C.dim)
-	text(250, y, 210, "Upgrade and where to get it", C.dim)
+	text(74, y, 146, "Equipped", C.dim)
+	text(224, y, 230, "Upgrade and where to get it", C.dim)
 	text(INNER - 50, y, 50, "Gain", C.dim, "RIGHT")
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 20
@@ -215,9 +221,9 @@ function draw.Me()
 		local u = upgrades[i]
 		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 34, C.stripe) end
 		text(0, y, 70, ns.SLOT_NAME[u.slot])
-		text(74, y, 170, u.equipped, C.dim)
-		text(250, y, 210, u.item.name)
-		text(250, y + 15, 210, u.item.source, C.dim, "LEFT", GameFontDisableSmall)
+		text(74, y, 146, u.equipped, C.dim)
+		text(224, y, 230, u.item.name)
+		text(224, y + 15, 230, u.item.source, C.dim, "LEFT", GameFontDisableSmall)
 		text(INNER - 50, y, 50, "+" .. number(u.gain), C.ok, "RIGHT")
 		if u.seen then
 			anySeen = true
@@ -233,10 +239,7 @@ function draw.Me()
 	if anySeen then notes[#notes + 1] = "seen: a player you inspected wears it, so it can be obtained." end
 	if unknown > 0 then notes[#notes + 1] = unknown .. " equipped item(s) are not in the database and count as zero." end
 	y = y + 8
-	for _, line in ipairs(notes) do
-		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
-		y = y + 14
-	end
+	for _, line in ipairs(notes) do y = note(y, line) end
 	return y
 end
 
@@ -249,16 +252,11 @@ end
 
 local function noFight()
 	text(0, 0, INNER, "No fight recorded yet", C.text, "LEFT", GameFontNormalLarge)
-	text(0, 30, INNER, "Fight something in a group. This fills in a few seconds after combat ends.")
-	local y = 48
+	local y = note(30, "Fight something in a group. This fills in a few seconds after combat ends.", C.text, GameFontHighlight)
 	if C_CVar and C_CVar.GetCVarBool("damageMeterEnabled") == false then
-		text(0, y, INNER, "The built-in damage meter is off. Turn it on in the game options first.", C.bad)
-		y = y + 18
+		y = note(y + 2, "The built-in damage meter is off. Turn it on in the game options first.", C.bad, GameFontHighlight)
 	end
-	if ns.fightProblem then
-		text(0, y, INNER, ns.fightProblem, C.bad)
-		y = y + 18
-	end
+	if ns.fightProblem then y = note(y + 2, ns.fightProblem, C.bad, GameFontHighlight) end
 	return y
 end
 
@@ -303,8 +301,7 @@ function draw.Group()
 		y = y + 22
 	end
 	if #rows == 0 then
-		text(0, y, INNER, "Nobody else of your class played the same way in this fight.", C.dim)
-		y = y + 22
+		y = note(y, "Nobody else of your class played the same way in this fight.", C.dim, GameFontHighlight) + 4
 	end
 	y = y + 12
 	local notes = {
@@ -316,10 +313,7 @@ function draw.Group()
 	}
 	if otherLevels then notes[#notes + 1] = "Lvl in yellow: another level than yours. Level alone changes damage, so that gap is not only gear and play." end
 	if leftOut > 0 then notes[#notes + 1] = leftOut .. " player(s) of your class left out: they use different spells." end
-	for _, line in ipairs(notes) do
-		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
-		y = y + 14
-	end
+	for _, line in ipairs(notes) do y = note(y, line) end
 	return y
 end
 
@@ -335,8 +329,7 @@ function draw.Fight()
 	end
 	if not other then
 		text(0, 0, INNER, "Nobody to compare with", C.text, "LEFT", GameFontNormalLarge)
-		text(0, 30, INNER, "Nobody else of your class played the same way in the last fight.", C.dim)
-		return 48
+		return note(30, "Nobody else of your class played the same way in the last fight.", C.dim, GameFontHighlight)
 	end
 	local me = fight.me
 	fightHeader(fight, "You vs " .. other.name, "share of total damage")
@@ -383,11 +376,9 @@ function draw.Fight()
 	if gap and gap.theirs - gap.mine > NOTABLE then
 		local name = C_Spell.GetSpellName(gap.id) or ("Spell " .. gap.id)
 		local points = math.floor((gap.theirs - gap.mine) * 100 + 0.5)
-		text(0, y, INNER, "Biggest gap: " .. name .. ". " .. other.name .. " gets " .. points .. " points more of the damage from it.", C.dim, "LEFT", GameFontDisableSmall)
-	else
-		text(0, y, INNER, "No spell stands out. You both spread your damage the same way.", C.dim, "LEFT", GameFontDisableSmall)
+		return note(y, "Biggest gap: " .. name .. ". " .. other.name .. " gets " .. points .. " points more of the damage from it.")
 	end
-	return y + 14
+	return note(y, "No spell stands out. You both spread your damage the same way.")
 end
 
 local function money(copper)
@@ -403,18 +394,15 @@ function draw.Shop()
 	text(0, 0, 300, "Auction house upgrades", C.text, "LEFT", GameFontNormalLarge)
 	text(INNER - 200, 3, 200, "prices stored by Auctionator", C.dim, "RIGHT")
 	if not profile then
-		text(0, 30, INNER, "wowsims has no stat weights for this class yet, so items cannot be rated.", C.dim)
-		return 48
+		return note(30, "wowsims has no stat weights for this class yet, so items cannot be rated.", C.dim, GameFontHighlight)
 	elseif not ns.Auctionator() then
-		text(0, 30, INNER, "Auctionator is not installed or not turned on.")
-		text(0, 48, INNER, "This tab reads the prices Auctionator has stored. The other tabs work without it.", C.dim)
-		return 66
+		local y = note(30, "Auctionator is not installed or not turned on.", C.text, GameFontHighlight)
+		return note(y + 2, "This tab reads the prices Auctionator has stored. The other tabs work without it.", C.dim, GameFontHighlight)
 	end
 	local rows = ns.ShopList(ns.ReadGear("player") or {}, class, UnitLevel("player"), profile, shopByValue)
 	if #rows == 0 then
-		text(0, 30, INNER, "Auctionator knows no price for anything better than your gear.")
-		text(0, 48, INNER, "Open the auction house, let Auctionator scan, then look again.", C.dim)
-		return 66
+		local y = note(30, "Auctionator knows no price for anything better than your gear.", C.text, GameFontHighlight)
+		return note(y + 2, "Open the auction house, let Auctionator scan, then look again.", C.dim, GameFontHighlight)
 	end
 	text(0, 24, INNER, shopByValue and "Sorted by value for money. Click to sort by gain." or "Sorted by gain. Click to sort by value for money.", C.dim, "LEFT", GameFontDisableSmall)
 	click(0, 20, INNER, 18, function()
@@ -437,7 +425,7 @@ function draw.Shop()
 		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 30, C.stripe) end
 		text(0, y, 70, ns.SLOT_NAME[row.slot])
 		text(74, y, 196, row.name)
-		if row.upTo then text(74, y + 14, 196, "random suffix, check the stats", C.dim, "LEFT", GameFontDisableSmall) end
+		if row.upTo then text(74, y + 14, 196, "best as \"" .. row.suffix .. "\"", C.dim, "LEFT", GameFontDisableSmall) end
 		text(274, y, 70, (row.upTo and "up to +" or "+") .. number(row.gain), C.ok, "RIGHT")
 		text(350, y, 72, money(row.price) .. (row.old and " *" or ""), C.text, "RIGHT")
 		local lost = not row.loss and "?" or row.loss == 0 and "free" or money(row.loss)
@@ -452,17 +440,11 @@ function draw.Shop()
 		Refresh()
 	end)
 	y = y + 34
-	if shopNote then
-		text(0, y, INNER, shopNote)
-		y = y + 20
-	end
+	if shopNote then y = note(y, shopNote, C.text, GameFontHighlight) + 4 end
 	local notes = { "Net cost: the price minus what a vendor pays you when you sell the item on. ? means not loaded yet." }
-	if anyUpTo then notes[#notes + 1] = "up to: the gain of the best random suffix. The price is the cheapest suffix on sale, so check before buying." end
+	if anyUpTo then notes[#notes + 1] = "up to: the gain with the suffix named under the item; other suffixes are worth less to you. The price is that of the cheapest suffix on sale, so pick the right one in Auctionator." end
 	if anyOld then notes[#notes + 1] = "* the price is older than three days." end
-	for _, line in ipairs(notes) do
-		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
-		y = y + 14
-	end
+	for _, line in ipairs(notes) do y = note(y, line) end
 	return y
 end
 

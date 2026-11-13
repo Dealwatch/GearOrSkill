@@ -257,10 +257,12 @@ for _, row in ipairs(ns.ShopList(S.gear.player, "SHAMAN", 20, profile, false)) d
 	if row.upTo then suffixed = suffixed or row end
 end
 assert(fixed and suffixed, "the sample should yield both fixed and random-suffix items")
-local item, best = ns.Item(suffixed.id), 0
+local item, best, bestName = ns.Item(suffixed.id), 0, nil
 for suffix in item.suffixes:gmatch("%d+") do
-	best = math.max(best, ns.ItemScore(item, profile, suffixed.slot, nil, tonumber(suffix)))
+	local score = ns.ItemScore(item, profile, suffixed.slot, nil, tonumber(suffix))
+	if score > best then best, bestName = score, ns.Data.suffixNames[tonumber(suffix)] end
 end
+eq(suffixed.suffix, bestName, "a suffix item names its best suffix")
 near(suffixed.gain, best - (wornSlots[suffixed.slot] and wornSlots[suffixed.slot].score or 0), "a suffix item shows the gain of its best suffix")
 eq(ns.Item(fixed.id).suffixes, "-", "fixed items have no suffix options")
 
@@ -296,7 +298,7 @@ case("shop tab: table, sort toggle and search button")
 ns.ShowTab("Shop")
 shows("Auction house upgrades"); shows("Sorted by gain."); shows(shop[1].name); shows("Search these in Auctionator")
 S.level = 20
-ns.ShowTab("Shop"); shows("up to +"); shows("random suffix, check the stats")
+ns.ShowTab("Shop"); shows("up to +"); shows('best as "of ')
 S.level = 60
 ns.ShowTab("Shop")
 for _, button in ipairs(Stub.Buttons(GearOrSkillFrame)) do

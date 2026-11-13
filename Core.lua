@@ -222,28 +222,31 @@ end
 -- byValue: order by gain per copper lost instead of by gain.
 -- Each row: slot, id, name, search (text to look for), gain, price, old (price older than a few
 -- days), loss (the net cost: price minus what a vendor pays back, nil if unknown) and, for items with a
--- random suffix, upTo = true: the gain is that of the best suffix and the price that of the
--- cheapest one on sale, since Auctionator's stored price does not say which suffix it was.
+-- random suffix, upTo = true and suffix = the name of the best one ("of the Eagle"): the gain is
+-- that suffix's and the price that of the cheapest one on sale, since Auctionator's stored
+-- price does not say which suffix it was.
 function ns.ShopList(links, class, level, profile, byValue)
 	local rows = {}
-	local function add(slot, item, gain, upTo)
+	local function add(slot, item, gain, suffix)
 		if gain < 1 then return end -- would show as +0
 		local copper, age, sells = price(item.id)
 		if not copper then return end
 		rows[#rows + 1] = {
-			slot = slot, id = item.id, name = item.name, search = item.name, gain = gain, upTo = upTo, price = copper,
+			slot = slot, id = item.id, name = item.name, search = item.name, gain = gain, price = copper,
+			upTo = suffix ~= nil, suffix = suffix and Data.suffixNames[suffix],
 			old = age ~= nil and age > OLD_PRICE_DAYS, loss = sells and math.max(copper - sells, 0) or nil,
 		}
 	end
 	forCandidates(links, class, level, profile, Data.slots, function(slot, item, replaced)
-		add(slot, item, ns.ItemScore(item, profile, slot) - replaced, false)
+		add(slot, item, ns.ItemScore(item, profile, slot) - replaced)
 	end)
 	forCandidates(links, class, level, profile, Data.suffixed, function(slot, item, replaced)
-		local best = 0
+		local best, bestSuffix = 0, nil
 		for suffix in item.suffixes:gmatch("%d+") do
-			best = math.max(best, ns.ItemScore(item, profile, slot, nil, tonumber(suffix)) - replaced)
+			local gain = ns.ItemScore(item, profile, slot, nil, tonumber(suffix)) - replaced
+			if gain > best then best, bestSuffix = gain, tonumber(suffix) end
 		end
-		add(slot, item, best, true)
+		if bestSuffix then add(slot, item, best, bestSuffix) end
 	end)
 	local function worth(row) return row.gain / math.max(row.loss or row.price, 1) end
 	table.sort(rows, function(a, b)

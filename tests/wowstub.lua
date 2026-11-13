@@ -56,6 +56,13 @@ function Region:SetText(text) assert(type(text) == "string", "SetText needs a st
 function Region:SetTextColor(r, g, b) assert(r and g and b, "SetTextColor needs r, g, b"); rawset(self, "color", { r, g, b, 1 }) end
 function Region:SetJustifyH(j) rawset(self, "justify", j) end
 function Region:SetWordWrap(wrap) rawset(self, "wrap", wrap) end
+-- Height of the text as laid out: one line, or as many as a wrapping text needs at an
+-- average glyph width a little above the game font's, so layouts stay on the safe side.
+function Region:GetStringHeight()
+	local size = self.font.size
+	if not self.wrap or not self.w then return size + 2 end
+	return math.max(1, math.ceil(#self.text * size * 0.56 / self.w)) * (size + 3)
+end
 for _, name in ipairs({ "SetFrameStrata", "EnableMouse", "SetMovable", "SetClampedToScreen", "RegisterForDrag", "StartMoving", "StopMovingOrSizing" }) do
 	Region[name] = function() end
 end
@@ -112,6 +119,7 @@ function Stub.Dump(root)
 				out[#out + 1] = {
 					kind = region.kind, x = x, y = y, w = w, h = h, text = region.text, color = region.color,
 					size = region.font and region.font.size, justify = region.justify, anchor = region.points[1][1],
+					wrap = region.wrap == true,
 				}
 			end
 		end

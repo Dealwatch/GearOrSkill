@@ -5,7 +5,7 @@ Usage (from the repo root): python3 tools/render_ui.py <output-dir>
 
 Loads the real addon code against tests/wowstub.lua with the sample state from
 tests/sample.lua and writes one HTML page per view. Open them in a browser or
-screenshot them. Fonts differ from the game, so treat text widths as approximate.
+screenshot them. The page uses a font a little wider than the game's, so text that fits here fits in game.
 Needs the "lupa" Python package.
 """
 import html
@@ -50,7 +50,7 @@ VIEWS = [
 PAGE = """<!doctype html><meta charset="utf-8"><title>GearOrSkill %s</title>
 <style>
 body{margin:0;padding:24px;background:#26302a}
-#win{position:relative;width:%dpx;height:%dpx;font-family:Arial,sans-serif}
+#win{position:relative;width:%dpx;height:%dpx;font-family:Verdana,"DejaVu Sans",sans-serif;letter-spacing:-0.3px}
 #win div{position:absolute;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
 </style><div id="win">
 %s
@@ -75,6 +75,8 @@ def render(regions, ox, oy):
         style = "left:%.1fpx;top:%.1fpx;font-size:%dpx;color:%s" % (x, y, region.size, rgba(region.color))
         if region.w:
             style += ";width:%.1fpx;text-align:%s" % (region.w, (region.justify or "LEFT").lower())
+            if region.wrap:
+                style += ";white-space:normal"
         elif region.anchor in ("CENTER", "TOP", "BOTTOM"):
             style += ";transform:translateX(-50%)"
         out.append('<div class="t" style="%s">%s</div>' % (style, html.escape(region.text or "")))
