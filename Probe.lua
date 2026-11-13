@@ -126,6 +126,28 @@ local function probeUsable()
 	say("info", "Weapons you can use, by tooltip: " .. table.concat(parts, ", ") .. (loading and ". Run /gos probe again for those not loaded" or ""))
 end
 
+-- Prints what the game's tooltip data says about one item, line by line: /gos probe tooltip 1318
+local function probeTooltip(id)
+	if not id then
+		say("info", "Usage: /gos probe tooltip <item id>")
+		return
+	end
+	local function color(c)
+		if type(c) ~= "table" then return "-" end
+		return string.format("%.2f/%.2f/%.2f", c.r or -1, c.g or -1, c.b or -1)
+	end
+	say("info", "Item " .. id .. ": loaded " .. show(C_Item.IsItemDataCachedByID(id)) .. ", usable by the addon's check: " .. show(ns.CanUse(id)))
+	local data = C_TooltipInfo.GetItemByID(id)
+	local lines = type(data) == "table" and data.lines or {}
+	say("info", #lines .. " tooltip lines")
+	for i = 1, math.min(8, #lines) do
+		local line = lines[i]
+		say("info", i .. ": type " .. show(line.type) .. " [" .. show(line.leftText) .. "] " .. color(line.leftColor)
+			.. " [" .. show(line.rightText) .. "] " .. color(line.rightColor)
+			.. " slot " .. show(line.isValidInvSlot) .. " kind " .. show(line.isValidItemType))
+	end
+end
+
 local function probeGear(unit, who)
 	local links, withStats, secrets = 0, 0, 0
 	for slot = FIRST_SLOT, LAST_SLOT do
@@ -306,6 +328,8 @@ function ns.Probe(arg)
 	if arg == "clear" then
 		GearOrSkillProbeLog = {}
 		print(PREFIX .. "log cleared")
+	elseif arg:match("^tooltip") then
+		try("Tooltip", probeTooltip, tonumber(arg:match("%d+")))
 	elseif arg == "auctionator" then
 		try("Auctionator", probeAuctionator)
 	elseif arg == "meter" then

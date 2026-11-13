@@ -42,7 +42,7 @@ The same job runs the simulator to calibrate the gear estimate (`Calibration.lua
 
 ## Checking what the game allows
 
-`/gos probe` checks whether the client lets addons read gear (yours and your target's), `/gos probe meter` checks the damage meter after a fight, and `/gos probe auctionator` checks what the Auctionator addon offers. Each prints one line per question, marked `[OK]`, `[PARTIAL]`, `[BLOCKED]` or `[INFO]`. Details are saved to `WTF/Account/<account>/SavedVariables/GearOrSkill.lua` on logout or `/reload`.
+`/gos probe` checks whether the client lets addons read gear (yours and your target's), `/gos probe meter` checks the damage meter after a fight, `/gos probe auctionator` checks what the Auctionator addon offers, and `/gos probe tooltip <item id>` prints what the game's tooltip data says about one item. Each prints one line per question, marked `[OK]`, `[PARTIAL]`, `[BLOCKED]` or `[INFO]`. Details are saved to `WTF/Account/<account>/SavedVariables/GearOrSkill.lua` on logout or `/reload`.
 
 ## Development
 

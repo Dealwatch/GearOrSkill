@@ -167,6 +167,7 @@ Stub.state = {
 	missingItems = {}, -- item ids this client does not have
 	cannotUse = {}, -- item ids whose tooltip shows red
 	notLoaded = {}, -- item ids the client is still loading
+	halfLoaded = {}, -- item ids whose tooltip so far has only the name line
 	knownSpells = {},
 }
 local S = Stub.state
@@ -215,10 +216,11 @@ RETRIEVING_ITEM_INFO = "Retrieving item information"
 C_TooltipInfo = { GetItemByID = function(id)
 	if S.notLoaded[id] then return { lines = { { leftText = RETRIEVING_ITEM_INFO, leftColor = { r = 1, g = 0.13, b = 0.13 } } } } end
 	local white, red = { r = 1, g = 1, b = 1 }, { r = 1, g = 0.13, b = 0.13 }
-	return { lines = {
-		{ leftText = "Item " .. id, leftColor = white },
-		{ leftText = "Two-Hand", rightText = "Axe", leftColor = white, rightColor = S.cannotUse[id] and red or white },
-	} }
+	local lines = { { type = 22, leftText = "Item " .. id, leftColor = white } }
+	if not S.halfLoaded[id] then
+		lines[2] = { type = 21, leftText = "Two-Hand", rightText = "Axe", leftColor = white, rightColor = S.cannotUse[id] and red or white }
+	end
+	return { lines = lines }
 end }
 C_SpecializationInfo = { GetInspectSpecialization = function() return 0 end }
 C_Traits = { HasValidInspectData = function() return false end }

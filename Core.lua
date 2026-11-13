@@ -158,6 +158,8 @@ local USABLE_TRIES = 25 -- candidates checked per slot before giving up
 local usableCache = {}
 local waitingForItems = false -- something drawn lacked item data; redraw when it arrives
 
+local EQUIP_SLOT_LINE = 21 -- Enum.TooltipDataLineType.EquipSlot
+
 local function isRed(color)
 	return type(color) == "table" and color.r > 0.9 and color.g < 0.3 and color.b < 0.3
 end
@@ -173,12 +175,18 @@ function ns.CanUse(id)
 	local ok, verdict = pcall(function()
 		local data = C_TooltipInfo.GetItemByID(id)
 		if type(data) ~= "table" or type(data.lines) ~= "table" or #data.lines == 0 then return true end
+		local typed, slotLine = false, false
 		for _, line in ipairs(data.lines) do
 			if line.leftText == RETRIEVING_ITEM_INFO then return nil end
 			if line.isValidInvSlot == false or line.isValidItemType == false or isRed(line.leftColor) or isRed(line.rightColor) then
 				return false
 			end
+			typed = typed or line.type ~= nil
+			slotLine = slotLine or line.type == EQUIP_SLOT_LINE
 		end
+		-- Every piece of gear has a line for its slot and kind, the one that turns red. A tooltip
+		-- without it is still filling in, so "nothing red" would be a guess.
+		if typed and not slotLine then return nil end
 		return true
 	end)
 	if not ok then return true end
