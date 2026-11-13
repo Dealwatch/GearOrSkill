@@ -1,6 +1,6 @@
 -- Test suite. Run from the repo root: lua tests/run.lua
 local Stub = dofile("tests/wowstub.lua")
-local ns = Stub.Load({ "Data.lua", "Core.lua", "UI.lua", "Probe.lua" })
+local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Core.lua", "UI.lua", "Probe.lua" })
 dofile("tests/sample.lua")(Stub, ns)
 local S = Stub.state
 
@@ -61,8 +61,30 @@ local function checkUpgrades(level)
 	end
 	return upgrades
 end
-checkUpgrades(60)
+local at60 = checkUpgrades(60)
 checkUpgrades(20)
+
+case("upgrade suggestions ask the client: missing items, armor skills, items seen on players")
+local top = at60[1].item
+S.missingItems[top.id] = true
+for _, u in ipairs(ns.Upgrades(S.gear.player, "SHAMAN", 60, profile)) do
+	assert(u.item.id ~= top.id, "an item the client does not have was suggested")
+end
+S.missingItems = {}
+local function wearsMail(level)
+	for _, u in ipairs(ns.Upgrades({}, "SHAMAN", level, profile)) do
+		if u.item.armor == 3 then return true end
+	end
+	return false
+end
+assert(not wearsMail(30), "no mail at 30 without the skill")
+S.knownSpells[8737] = true
+assert(wearsMail(30), "mail at 30 once the client says the skill is known")
+S.knownSpells = {}
+eq(at60[1].seen, false, "nothing seen yet")
+ns.RecordSeen({ [1] = Stub.link(top.name) })
+eq(ns.Upgrades(S.gear.player, "SHAMAN", 60, profile)[1].seen, true, "seen item is marked")
+GearOrSkillSeen = nil
 
 case("group members of the same class are inspected after a fight, never in combat")
 S.inCombat = true
@@ -75,6 +97,11 @@ Stub.Fire("INSPECT_READY", Stub.guids.thrallix)
 assert(ns.gearCache[Stub.guids.thrallix], "gear was not cached")
 Stub.RunTimers()
 eq(Stub.inspected, "party2", "next group member of the same class")
+assert(GearOrSkillSeen[ns.ParseLink(S.gear.party1[5])], "inspected gear is remembered as seen")
+S.units.target, S.gear.target = S.units.party3, { [1] = Stub.link("Insightful Hood") }
+Stub.Fire("INSPECT_READY", S.units.party3.guid)
+assert(GearOrSkillSeen[18490], "a manual inspect of the target is remembered too")
+S.units.target, S.gear.target = nil, nil
 has("Thrallix: gear +"); has("damage +33%")
 
 case("spell overlap decides who plays the same spec")
@@ -89,8 +116,29 @@ rows = ns.Compare(fight, profile)
 assert(rows[1].gear and rows[1].gear > 0, "Thrallix has better gear in the sample")
 near(rows[1].rest, rows[1].damage - rows[1].gear, "unexplained part")
 local mine, theirs = ns.GearScore(S.gear.player, profile), ns.GearScore(S.gear.party1, profile)
-assert(rows[1].gear < theirs / mine - 1, "base stats must dampen the gear difference")
-assert(ns.BaseValue(S.gear.player, profile) > 0, "base value from the character sheet")
+assert(rows[1].gear < theirs / mine - 1, "the part that is not gear must dampen the gear difference")
+
+case("gear estimate: calibrated at max level, character sheet below")
+local calibration = ns.Calibration.SHAMAN["Enhancement: Pre-BiS"]
+local base, calibrated = ns.BaseValue(S.gear.player, profile)
+eq(calibrated, true, "calibrated at level 60")
+eq(base, calibration.total - ns.GearScore(calibration.ref, profile), "base is the reference character minus its gear")
+assert(select(2, ns.GearScore(calibration.ref, profile)) and select(3, ns.GearScore(calibration.ref, profile)) == 0, "every reference item is in the database")
+near(rows[1].gear, (base + theirs) / (base + mine) - 1, "gear difference uses the calibrated base")
+S.level = 59
+local sheet, fromSim = ns.BaseValue(S.gear.player, profile)
+eq(fromSim, false, "below max level the character sheet is used"); assert(sheet > 0, "sheet value")
+S.level = 60
+GearOrSkillDB.profile = 1
+eq(select(2, ns.BaseValue(S.gear.player, ns.Profile())), true, "Elemental is calibrated too")
+GearOrSkillDB.profile = 2
+for class, list in pairs(ns.Calibration) do
+	for name in pairs(list) do
+		local found = false
+		for _, p in ipairs(ns.Data.profiles[class]) do found = found or p.name == name end
+		assert(found, "calibration for a profile that does not exist: " .. name)
+	end
+end
 
 case("meter values locked right after combat are read on a retry")
 ns.lastFight, S.lockedReads = nil, 1
@@ -110,8 +158,10 @@ case("window: tabs, profile switch, click through to the spell view")
 SlashCmdList.GEARORSKILL("")
 assert(GearOrSkillFrame:IsShown(), "window did not open")
 shows("Enhancement: Pre-BiS"); shows("Hit"); shows("BEST UPGRADES FOR YOUR LEVEL"); shows("Gear score")
+shows("seen: a player you inspected wears it")
 ns.ShowTab("Group")
 shows("Thrallix"); shows("+33%"); shows("1 player(s) of your class left out")
+shows("The gear estimate is calibrated with the simulator for your profile.")
 local clicked
 for _, button in ipairs(Stub.Buttons(GearOrSkillFrame)) do
 	if button.w and button.w > 400 then button.scripts.OnClick(); clicked = true; break end
@@ -144,6 +194,7 @@ S.gear.target = S.gear.party1
 SlashCmdList.GEARORSKILL("probe")
 Stub.Fire("INSPECT_READY", Stub.guids.thrallix)
 Stub.RunTimers()
+has("Armor skills at level 60: mail no, plate no")
 has("[OK]|r Your gear: 9 items, 9 with readable stats")
 has("[OK]|r Target Thrallix: 9 items, 9 with readable stats")
 has("Target talents: spec id 0, talent data no")

@@ -12,16 +12,21 @@ import re
 import sys
 from pathlib import Path
 
-# ponytail: one constant decides what counts as obtainable. The database marks every item
-# as phase 1, including raids that are not open, so anything above this item level is
-# hidden from upgrade suggestions. Raise it when raids open.
+# What counts as obtainable, on top of the simulator's own phase per item:
+# - a raid drop, once its raid is open (RAID_OPENS);
+# - anything else up to MAX_ITEM_LEVEL, which keeps raid-tier quest, vendor and PvP
+#   rewards out while their raids are closed.
+# ponytail: the database marks every item as phase 1, so these two tables carry the
+# schedule by hand. Drop them once wowsims tags phases for real.
 MAX_ITEM_LEVEL = 66
 
-# ponytail: raids that are not open yet, by zone name as the database spells it. Items that only
-# drop there are hidden from upgrade suggestions. Remove a name when its raid opens.
-CLOSED_RAIDS = {
-    "Molten Core", "Blackwing Lair", "Zul'Gurub", "Ruins of Ahn'Qiraj", "Ahn'Qiraj", "Naxxramas",
-    "Onyxia's Lair", "Barrow Deeps", "Hyjal Summit",
+# Raids by zone name as the database spells it -> day their drops can be obtained.
+# None: no date announced, stays hidden. The daily build opens a raid on its day.
+# Dates: https://www.icy-veins.com/wow-forever/roadmap
+RAID_OPENS = {
+    "Onyxia's Lair": "2026-12-09", "Barrow Deeps": "2026-12-09", "Hyjal Summit": "2026-12-09",
+    "Molten Core": None, "Blackwing Lair": None, "Zul'Gurub": None, "Ruins of Ahn'Qiraj": None,
+    "Ahn'Qiraj": None, "Naxxramas": None,
 }
 # ponytail: many quest rewards carry no required level. Assume they are for characters about
 # five levels below their item level, which keeps endgame rewards away from low levels.
@@ -64,7 +69,7 @@ def read_profiles(sim, stats):
             if not weights:
                 continue
             label = name if spec_dir in GENERIC_SPEC_DIRS else "%s: %s" % (spec_dir.capitalize(), name)
-            profile = {"name": label, "w": weights}
+            profile = {"name": label, "w": weights, "dir": path.parent, "preset": name}
             for key, value in re.findall(r"\[PseudoStat\.(\w+)\]:\s*(-?[\d.]+)", pseudo_block):
                 if key in PSEUDO_KEYS:
                     profile[PSEUDO_KEYS[key]] = float(value)
@@ -91,11 +96,25 @@ def read_capabilities(sim, proto):
     return armor, weapons, ranged
 
 
-def source_text(item, db, professions):
-    sources = item.get("sources") or []
-    if not sources:
+def obtainable_source(item, ilvl, zones, phase, today):
+    """The first source the item can be obtained from on that day, or None."""
+    if item.get("phase", 1) > phase:
+        return None
+    for source in item.get("sources") or []:
+        zone = zones.get(source.get("drop", {}).get("zoneId"))
+        if zone in RAID_OPENS:
+            opens = RAID_OPENS[zone]
+            if opens and opens <= today:
+                return source
+        elif ilvl <= MAX_ITEM_LEVEL:
+            return source
+    return None
+
+
+def source_text(source, db, professions):
+    if not source:
         return "-"
-    kind, info = next(iter(sources[0].items()))
+    kind, info = next(iter(source.items()))
     zone = db["zone"].get(info.get("zoneId"))
     if kind == "drop":
         who = db["npc"].get(info.get("npcId")) or (info.get("otherName") or "").strip()
@@ -114,8 +133,9 @@ def source_text(item, db, professions):
     return kind
 
 
-def build(sim):
+def build(sim, today):
     proto = (sim / "proto/common.proto").read_text()
+    phase = int(re.search(r"CURRENT_PHASE = Phase\.Phase(\d+)", (sim / "ui/sim/constants/other.ts").read_text()).group(1))
     stats = enum(proto, "Stat")
     classes = {v: k[len("Class"):].upper() for k, v in enum(proto, "Class").items()}
     professions = {v: k for k, v in enum(proto, "Profession").items()}
@@ -139,19 +159,17 @@ def build(sim):
         item_stats = scaling.get("stats") or {}
         dps = round(scaling.get("unroundedDps") or 0, 1)
         ilvl = scaling.get("ilvl") or 0
+        source = obtainable_source(item, ilvl, db["zone"], phase, today)
         fields = [
             item["type"], item.get("armorType", 0), item.get("weaponType", 0), item.get("handType", 0),
             item.get("rangedWeaponType", 0), item.get("reqLvl") or max(1, ilvl - ITEM_LEVEL_LEAD), ilvl, "%g" % dps, scaling.get("randPropPoints", 0),
             ",".join(classes[c] for c in item.get("classAllowlist") or [] if c in classes) or "-",
-            sparse(item_stats), item["name"], source_text(item, db, professions),
+            sparse(item_stats), item["name"], source_text(source or (item.get("sources") or [None])[0], db, professions),
         ]
         items[item["id"]] = "^".join(str(f).replace("^", " ") for f in fields)
-        raid_only = all(
-            "drop" in s and db["zone"].get(s["drop"].get("zoneId")) in CLOSED_RAIDS for s in item.get("sources") or [{}]
-        )
         is_candidate = (
-            not raid_only and item.get("quality", 0) >= 2 and item.get("sources") and not item.get("randomSuffixOptions")
-            and ilvl <= MAX_ITEM_LEVEL and item["type"] != TRINKET and (item_stats or dps)
+            source and item.get("quality", 0) >= 2 and not item.get("randomSuffixOptions")
+            and item["type"] != TRINKET and (item_stats or dps)
         )
         if is_candidate:
             slots.setdefault(item["type"], []).append(item["id"])
@@ -216,7 +234,7 @@ def build(sim):
 def main():
     sim = Path(sys.argv[1])
     target = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).resolve().parent.parent / "Data.lua"
-    body, summary = build(sim)
+    body, summary = build(sim, datetime.date.today().isoformat())
     built_line = re.compile(r'^ns\.Data\.built = "[^"]*"\n', re.M)
     if target.exists() and built_line.sub("", target.read_text()) == body:
         print("Data.lua unchanged (%s)" % summary)

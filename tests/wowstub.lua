@@ -156,6 +156,8 @@ Stub.state = {
 	lockedReads = 0, -- how many more meter reads return locked values for other players
 	duration = 102,
 	sheet = { 240, 130, 260, 170, 120 }, -- character sheet: strength, agility, stamina, intellect, spirit
+	missingItems = {}, -- item ids this client does not have
+	knownSpells = {},
 }
 local S = Stub.state
 
@@ -185,7 +187,11 @@ RAID_CLASS_COLORS = { SHAMAN = { r = 0, g = 0.44, b = 0.87 }, ROGUE = { r = 1, g
 SlashCmdList = {}
 C_Timer = { After = function(_, fn) Stub.timers[#Stub.timers + 1] = fn end }
 C_CVar = { GetCVarBool = function() return true end }
-C_Item = { GetItemStats = function(link) if not link:find("Shirt") then return { ITEM_MOD_STRENGTH_SHORT = 5 } end end }
+C_Item = {
+	GetItemStats = function(link) if not link:find("Shirt") then return { ITEM_MOD_STRENGTH_SHORT = 5 } end end,
+	DoesItemExistByID = function(id) return not S.missingItems[id] end,
+}
+function IsSpellKnown(id) return S.knownSpells[id] == true end
 C_SpecializationInfo = { GetInspectSpecialization = function() return 0 end }
 C_Traits = { HasValidInspectData = function() return false end }
 C_Spell = { GetSpellName = function(id) return S.spellNames and S.spellNames[id] or ("Spell " .. id) end }

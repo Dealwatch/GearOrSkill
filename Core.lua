@@ -6,7 +6,8 @@ local SAME_SPEC_OVERLAP = 0.5 -- share of damage that must come from the same sp
 local INSPECT_GAP = 1.5 -- seconds between two inspect requests
 local INSPECT_MAX_AGE = 600
 local METER_DELAY, METER_ATTEMPTS = 3, 3 -- the game unlocks meter values a moment after combat
-local HEAVY_ARMOR_LEVEL = 40 -- ponytail: vanilla rule (mail/plate from 40); confirm for Forever in game
+local HEAVY_ARMOR_LEVEL = 40 -- ponytail: vanilla rule (mail/plate from 40); the spell check below overrides it
+local ARMOR_SKILL = { [3] = 8737, [4] = 750 } -- Classic spell ids of the Mail and Plate Mail skills
 
 -- Inventory slot -> item type in the database. Shirt (4) and tabard (19) carry no stats.
 local SLOT_TYPE = {
@@ -128,7 +129,7 @@ local function usable(item, class, level, slot)
 		return Data.ranged[class] ~= nil and Data.ranged[class][item.ranged] == true
 	elseif item.armor > 0 then
 		if item.armor > (Data.armor[class] or 0) then return false end
-		return item.armor ~= HEAVY_ARMOR[class] or level >= HEAVY_ARMOR_LEVEL
+		return item.armor ~= HEAVY_ARMOR[class] or level >= HEAVY_ARMOR_LEVEL or IsSpellKnown(ARMOR_SKILL[item.armor]) == true
 	end
 	return true
 end
@@ -147,7 +148,7 @@ function ns.Upgrades(links, class, level, profile)
 		if slot == 11 and scoreOf(12) < scoreOf(11) then shown = 12 end -- replace the weaker ring
 		local best, bestGain = nil, 0
 		for _, id in ipairs(Data.slots[SLOT_TYPE[slot]] or {}) do
-			if not worn[id] then
+			if not worn[id] and C_Item.DoesItemExistByID(id) then -- skip what this client does not have
 				local item = ns.Item(id)
 				if item and usable(item, class, level, slot) then
 					local replaced = scoreOf(shown)
@@ -160,6 +161,7 @@ function ns.Upgrades(links, class, level, profile)
 		if best then
 			results[#results + 1] = {
 				slot = shown, equipped = equipped[shown] and equipped[shown].name or "empty", item = best, gain = bestGain,
+				seen = GearOrSkillSeen ~= nil and GearOrSkillSeen[best.id] == true,
 			}
 		end
 	end
@@ -167,23 +169,42 @@ function ns.Upgrades(links, class, level, profile)
 	return results
 end
 
--- Value of everything a character has besides gear, in the profile's unit: the primary stats
--- on the character sheet minus what the gear adds to them.
--- ponytail: covers primary stats only, so it is too low for casters whose spells have a large
--- base damage; gear differences then look bigger than they are. A simulation would fix that.
+-- Value of everything a character has besides gear, in the profile's unit.
+-- Returns the value and whether it comes from the simulator.
+-- With a calibration (Calibration.lua, max level only): the simulated worth of the whole
+-- reference character minus the worth of its gear. That covers base stats, talents and the
+-- raid buffs the reference character has.
+-- Otherwise: the primary stats on the character sheet minus what the gear adds to them.
+-- ponytail: that fallback is too low for casters, whose spells have a large base damage, so
+-- gear differences look bigger than they are. It goes away as wowsims adds reference characters.
+local SIM_LEVEL = 60
 local SHEET_STAT = { [1] = 0, [2] = 1, [3] = 2, [4] = 3, [5] = 13 } -- UnitStat index -> database stat
 function ns.BaseValue(links, profile)
+	local _, class = UnitClass("player")
+	local calibration = ns.Calibration and ns.Calibration[class] and ns.Calibration[class][profile.name]
+	if calibration and UnitLevel("player") >= SIM_LEVEL then
+		return math.max(0, calibration.total - ns.GearScore(calibration.ref, profile)), true
+	end
 	local primary, sheet = { w = {} }, 0
 	for unitStat, stat in pairs(SHEET_STAT) do
 		local w = profile.w[stat]
 		if w then
 			local _, effective = UnitStat("player", unitStat)
-			if isSecret(effective) or not effective then return 0 end
+			if isSecret(effective) or not effective then return 0, false end
 			primary.w[stat] = w
 			sheet = sheet + w * effective
 		end
 	end
-	return math.max(0, sheet - ns.GearScore(links, primary))
+	return math.max(0, sheet - ns.GearScore(links, primary)), false
+end
+
+-- Remembers items seen on other players: proof that they can be obtained.
+function ns.RecordSeen(links)
+	GearOrSkillSeen = GearOrSkillSeen or {}
+	for _, link in pairs(links) do
+		local id = ns.ParseLink(link)
+		if id then GearOrSkillSeen[id] = true end
+	end
 end
 
 -- Share of damage two players get from the same spells, 0..1.
@@ -198,14 +219,16 @@ function ns.Overlap(a, b)
 end
 
 -- Players of your class who play like you, compared with you.
--- Returns rows { name, guid, damage, gear, rest } and the number of players left out.
+-- Returns rows { name, guid, damage, gear, rest }, the number of players left out, and
+-- whether the gear estimate is calibrated with the simulator.
 function ns.Compare(fight, profile)
 	local me = fight.me
 	local rows, leftOut = {}, 0
-	if not me then return rows, leftOut end
+	if not me then return rows, leftOut, false end
 	local myLinks = ns.ReadGear("player")
 	local myScore = myLinks and profile and ns.GearScore(myLinks, profile) or 0
-	local base = myScore > 0 and ns.BaseValue(myLinks, profile) or 0
+	local base, calibrated = 0, false
+	if myScore > 0 then base, calibrated = ns.BaseValue(myLinks, profile) end
 	for _, other in ipairs(fight.others) do
 		if other.class == me.class then
 			if ns.Overlap(me, other) >= SAME_SPEC_OVERLAP then
@@ -225,7 +248,7 @@ function ns.Compare(fight, profile)
 		end
 	end
 	table.sort(rows, function(a, b) return a.damage > b.damage end)
-	return rows, leftOut
+	return rows, leftOut, calibrated
 end
 
 local function readSource(src, sessionType, meterType)
@@ -311,7 +334,16 @@ function ns.QueueInspects()
 end
 
 local function onInspectReady(guid)
-	if not waitingFor or isSecret(guid) or guid ~= waitingFor.guid then return end
+	if isSecret(guid) then return end
+	if not waitingFor or guid ~= waitingFor.guid then
+		-- Someone else asked (you or another addon inspected your target): just note the items.
+		local target = UnitGUID("target")
+		if not isSecret(target) and target == guid then
+			local links = ns.ReadGear("target")
+			if links then ns.RecordSeen(links) end
+		end
+		return
+	end
 	local unit = waitingFor.unit
 	waitingFor = nil
 	local current = UnitGUID(unit)
@@ -319,6 +351,7 @@ local function onInspectReady(guid)
 		local links = ns.ReadGear(unit)
 		if links and next(links) then
 			ns.gearCache[guid] = { links = links, time = GetTime() }
+			ns.RecordSeen(links)
 			if ns.OnGear then ns.OnGear() end
 		end
 	end

@@ -59,6 +59,11 @@ local function probeClient()
 	say("info", "Client " .. show(version) .. " (" .. show(build) .. "), interface " .. show(interface))
 end
 
+local function probeArmorSkills()
+	local function known(id) return IsSpellKnown(id) == true and "yes" or "no" end
+	say("info", "Armor skills at level " .. show(UnitLevel("player")) .. ": mail " .. known(8737) .. ", plate " .. known(750))
+end
+
 local function probeGear(unit, who)
 	local links, withStats, secrets = 0, 0, 0
 	for slot = FIRST_SLOT, LAST_SLOT do
@@ -243,6 +248,7 @@ function ns.Probe(arg)
 		try("Meter", probeMeter, 1)
 	else
 		try("Client", probeClient)
+		try("Armor skills", probeArmorSkills)
 		try("Your gear", probeGear, "player", "Your gear")
 		try("Target", probeTarget)
 	end

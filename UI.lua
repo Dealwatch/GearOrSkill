@@ -193,6 +193,7 @@ function draw.Me()
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 20
 	local upgrades = ns.Upgrades(links, class, level, profile)
+	local anySeen = false
 	for i = 1, math.min(MAX_UPGRADES, #upgrades) do
 		local u = upgrades[i]
 		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 34, C.stripe) end
@@ -201,16 +202,23 @@ function draw.Me()
 		text(250, y, 210, u.item.name)
 		text(250, y + 15, 210, u.item.source, C.dim, "LEFT", GameFontDisableSmall)
 		text(INNER - 50, y, 50, "+" .. number(u.gain), C.ok, "RIGHT")
+		if u.seen then
+			anySeen = true
+			text(INNER - 50, y + 15, 50, "seen", C.ok, "RIGHT", GameFontDisableSmall)
+		end
 		y = y + 34
 	end
 	if #upgrades == 0 then
 		text(0, y, INNER, "Nothing better found for your level.", C.dim)
 		y = y + 20
 	end
-	y = math.max(y + 6, H - TOP - PAD - 20 - (unknown > 0 and 30 or 16))
-	text(0, y, INNER, "Weights and items: wowsims, data of " .. Data.built .. ". Weights are measured for level 60.", C.dim, "LEFT", GameFontDisableSmall)
-	if unknown > 0 then
-		text(0, y + 14, INNER, unknown .. " equipped item(s) are not in the database and count as zero.", C.dim, "LEFT", GameFontDisableSmall)
+	local notes = { "Weights and items: wowsims, data of " .. Data.built .. ". Weights are measured for level 60." }
+	if anySeen then notes[#notes + 1] = "seen: a player you inspected wears it, so it can be obtained." end
+	if unknown > 0 then notes[#notes + 1] = unknown .. " equipped item(s) are not in the database and count as zero." end
+	y = math.max(y + 6, H - TOP - PAD - 20 - 14 * #notes)
+	for _, line in ipairs(notes) do
+		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
+		y = y + 14
 	end
 end
 
@@ -232,7 +240,7 @@ function draw.Group()
 	local fight = ns.lastFight
 	if not fight then return noFight() end
 	local _, class = UnitClass("player")
-	local rows, leftOut = ns.Compare(fight, (ns.Profile()))
+	local rows, leftOut, calibrated = ns.Compare(fight, (ns.Profile()))
 	fightHeader(fight, "Players like you", "same class, same spells")
 	local y = 34
 	text(0, y, 150, "Player", C.dim)
@@ -269,7 +277,9 @@ function draw.Group()
 	y = y + 12
 	local notes = {
 		"Gear: damage difference expected from the items alone, by the weights of your profile.",
-		"Not explained by gear: rotation, talents, buffs, time on target. An estimate, not a simulation.",
+		"Not explained by gear: rotation, talents, buffs, time on target.",
+		calibrated and "The gear estimate is calibrated with the simulator for your profile."
+			or "Rough gear estimate: the simulator has no reference character for your profile or level yet.",
 		"Red: the other player gets more out of the gear. Green: you do. Click a player for the spell view.",
 	}
 	if leftOut > 0 then notes[#notes + 1] = leftOut .. " player(s) of your class left out: they use different spells." end

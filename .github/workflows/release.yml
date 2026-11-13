@@ -1,8 +1,8 @@
 name: Release
 
 # The version in GearOrSkill.toc is the source of truth. A push to main releases that
-# version if it has no release yet. The daily run refreshes Data.lua from wowsims and,
-# only if it changed, raises the patch version, commits and releases.
+# version if it has no release yet. The daily run refreshes Data.lua and Calibration.lua
+# from wowsims and, only if one changed, raises the patch version, commits and releases.
 on:
   push:
     branches: [main]
@@ -25,11 +25,32 @@ jobs:
         run: |
           git clone --quiet --depth 1 https://github.com/wowsims/forever "$RUNNER_TEMP/wowsims"
           python3 tools/build_data.py "$RUNNER_TEMP/wowsims"
+      # Calibration needs the simulator built from source. If that fails (upstream build
+      # trouble), the committed Calibration.lua stays and the data refresh still goes out.
+      - name: Set up Go for the simulator
+        if: github.event_name != 'push'
+        continue-on-error: true
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ runner.temp }}/wowsims/go.mod
+          cache-dependency-path: ${{ runner.temp }}/wowsims/go.sum
+      - name: Calibrate with the simulator
+        if: github.event_name != 'push'
+        continue-on-error: true
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q protobuf-compiler
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          make -C "$RUNNER_TEMP/wowsims" bin/wowsimcli
+          pip install --quiet lupa
+          python3 tools/calibrate.py "$RUNNER_TEMP/wowsims" "$RUNNER_TEMP/wowsims/bin/wowsimcli"
       - name: Test
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q lua5.1
           lua5.1 tests/run.lua
+          python3 tests/test_build_data.py
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

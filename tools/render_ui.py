@@ -16,7 +16,7 @@ import lupa.lua51 as lupa  # the game runs Lua 5.1
 
 SETUP = """
 local Stub = dofile("tests/wowstub.lua")
-local ns = Stub.Load({ "Data.lua", "Core.lua", "UI.lua", "Probe.lua" })
+local ns = Stub.Load({ "Data.lua", "Calibration.lua", "Core.lua", "UI.lua", "Probe.lua" })
 dofile("tests/sample.lua")(Stub, ns)
 GearOrSkillDB = { profile = 2 }
 Stub.Fire("PLAYER_REGEN_ENABLED")
@@ -31,6 +31,7 @@ VIEWS = [
     ("group", 'ns.ShowTab("Group")'),
     ("fight", 'ns.ShowTab("Fight")'),
     ("me-level-20", 'Stub.state.level = 20; ns.ShowTab("Me")'),
+    ("group-level-20", 'ns.ShowTab("Group")'),
     ("no-fight", 'Stub.state.level = 60; ns.lastFight = nil; ns.ShowTab("Group")'),
 ]
 
