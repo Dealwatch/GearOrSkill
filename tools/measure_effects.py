@@ -5,9 +5,11 @@ Usage: python3 tools/measure_effects.py <path-to-wowsims-forever> <path-to-wowsi
 
 Stats and weapon damage are rated by weights; a proc or use effect is not in them. For every
 weight profile with a reference character, each weapon with an effect is simulated twice in
-that character's hands: the real weapon, and a plain twin of the same kind and speed that is
-given the weapon's stats and damage as bonuses. The twin has everything but the effect, so the
-difference in damage is the effect. It is stored in points of gear score, using the damage one
+that character's hands: the real weapon, and a plain twin of the same kind, hands and speed
+that is given the weapon's stats and damage as bonuses. The twin has everything but the
+effect, so the difference in damage is the effect. A weapon without such a twin is left out.
+Before a profile is measured, a few weapons without any effect go through the same
+procedure; if they do not come out at zero, the profile is skipped. It is stored in points of gear score, using the damage one
 point is worth for that profile (Calibration.lua, Measured.lua).
 
 Where the simulator does not play an effect yet, the difference is zero; the addon then says
@@ -33,6 +35,10 @@ from measure_weights import MEASURED_CLASSES, parse, title
 ITERATIONS = 5000
 MAX_PER_RUN = 400  # weapon measurements per run, two simulations each
 MIN_DPS = 1.0  # smaller differences are not an effect worth showing (an unplayed one measures about 0.1)
+CONTROLS = 4  # effect-free weapons measured per profile first; they must come out below MIN_DPS
+# An item's values the twin can be given; one with anything else (weapon skill, bonus against
+# beasts) is no clean control.
+PLAIN_FIELDS = {"ilvl", "randPropPoints", "stats", "weaponDamageMin", "weaponDamageMax", "unroundedDps"}
 WEAPON, RANGED = 13, 14
 MAIN_HAND_SLOT, OFF_HAND_SLOT, RANGED_SLOT = 14, 15, 16  # places in a simulator character's equipment
 OFF_HAND_ONLY, TWO_HAND = 3, 4
@@ -69,11 +75,18 @@ def references(sim, cli, stats, generated):
                     yield cls.upper(), profile.name, defaults, player, profile.per, {"mh": profile.mh, "rg": profile.rg}
 
 
-def candidates(items, cls, weapons, ranged, class_ids, profile):
+def candidates(items, cls, weapons, ranged, class_ids, profile, controls=False):
     """Weapons with an effect this class can use. Ranged ones only where ranged damage counts,
-    melee ones not for profiles that only shoot."""
+    melee ones not for profiles that only shoot.
+    controls=True gives the opposite set instead: weapons with stats and nothing else, which
+    must measure as having no effect."""
     for item in items:
-        if not item.get("itemEffects") or item.get("randomSuffixOptions") or item.get("quality", 0) < 2:
+        if item.get("randomSuffixOptions") or item.get("quality", 0) < 2:
+            continue
+        if controls:
+            if item.get("itemEffects") or not scaling(item).get("stats") or not set(scaling(item)) <= PLAIN_FIELDS:
+                continue
+        elif not item.get("itemEffects"):
             continue
         if item.get("classAllowlist") and class_ids[cls] not in item["classAllowlist"]:
             continue
@@ -89,18 +102,15 @@ def candidates(items, cls, weapons, ranged, class_ids, profile):
 
 
 def twin_of(item, plain):
-    """The plain weapon closest to the item: same kind and hands, nearest speed, then nearest damage."""
-    def same(key):
-        return [p for p in plain if p.get("type") == item["type"] and p.get(key) == item.get(key)]
-
-    if item["type"] == RANGED:
-        pool = same("rangedWeaponType")
-    else:
-        pool = [p for p in same("handType") if p.get("weaponType") == item.get("weaponType")] or same("handType")
+    """A plain weapon to stand in for the item: same kind, same hands and exactly the same speed.
+    None if there is none: kind and speed change the damage by themselves, so a twin that
+    differs in either would pass that off as an effect."""
+    kind = "rangedWeaponType" if item["type"] == RANGED else "weaponType"
+    pool = [p for p in plain if p.get("type") == item["type"] and p.get(kind) == item.get(kind)
+            and p.get("handType") == item.get("handType") and abs(p["weaponSpeed"] - item["weaponSpeed"]) < 0.01]
     if not pool:
         return None
-    return min(pool, key=lambda p: (abs(p["weaponSpeed"] - item["weaponSpeed"]),
-                                    abs(scaling(p)["unroundedDps"] - scaling(item)["unroundedDps"]), p["id"]))
+    return min(pool, key=lambda p: (abs(scaling(p)["unroundedDps"] - scaling(item)["unroundedDps"]), p["id"]))
 
 
 def effect_dps(cli, build, player, item, twin, sizes):
@@ -158,14 +168,25 @@ def main():
 
     budget, pending, result = MAX_PER_RUN, 0, {}
     for cls, name, build, player, per_point, profile in references(sim, cli, stats, generated):
-        values = result.setdefault((cls, name), {})
-        for item in sorted(candidates(items, cls, weapons, ranged, class_ids, profile), key=lambda i: i["id"]):
-            if item["id"] in known.get((cls, name), {}):
-                values[item["id"]] = known[(cls, name)][item["id"]]
-                continue
-            twin = twin_of(item, plain)
-            if not twin:
-                continue
+        values = result.setdefault((cls, name), dict(known.get((cls, name), {})))
+        todo = [(item, twin_of(item, plain)) for item in sorted(candidates(items, cls, weapons, ranged, class_ids, profile), key=lambda i: i["id"])
+                if item["id"] not in values]
+        todo = [(item, twin) for item, twin in todo if twin]  # no twin: cannot be measured, stays unrated
+        if not todo or budget <= 0:
+            pending += len(todo)
+            continue
+        # The method must find nothing where there is nothing: check it on effect-free weapons of
+        # this profile before trusting what it finds on the others.
+        controls = [i for i in sorted(candidates(items, cls, weapons, ranged, class_ids, profile, controls=True), key=lambda i: i["id"])
+                    if twin_of(i, plain)]
+        controls = controls[::max(1, len(controls) // CONTROLS)][:CONTROLS]
+        off = [(i["name"], gained) for i in controls
+               for gained in [effect_dps(cli, build, player, i, twin_of(i, plain), sizes)] if abs(gained) >= MIN_DPS]
+        if off or not controls:
+            print("%s %s: control weapons without an effect measured %s, profile skipped" % (cls, name, off or "nothing"), file=sys.stderr)
+            pending += len(todo)
+            continue
+        for item, twin in todo:
             if budget <= 0:
                 pending += 1
                 continue
