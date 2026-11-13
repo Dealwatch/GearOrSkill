@@ -220,6 +220,24 @@ S.lockedReads, S.inCombat = 0, true
 SlashCmdList.GEARORSKILL("probe meter")
 has("[INFO]|r Meter: in combat")
 S.inCombat = false
+case("probe: Auctionator missing, then present with one function absent")
+SlashCmdList.GEARORSKILL("probe auctionator")
+has("[INFO]|r Auctionator is not loaded")
+Auctionator = { Constants = { IsLegacyAH = false }, API = { v1 = {
+	GetAuctionPriceByItemID = function(caller, id) assert(caller == "GearOrSkill" and type(id) == "number") return 1200 end,
+	GetAuctionPriceByItemLink = function(_, link) return link:find("Treant") and 5000 or nil end,
+	GetAuctionAgeByItemLink = function() return 1 end,
+	GetVendorPriceByItemID = function() return 800 end,
+	IsAuctionDataExactByItemLink = function(_, link) return link:find("Treant") ~= nil end,
+	CreateShoppingList = function() end,
+	RegisterForDBUpdate = function() end,
+} } }
+SlashCmdList.GEARORSKILL("probe auctionator")
+has("[PARTIAL]|r Auctionator functions: missing MultiSearchExact")
+has("Auctionator prices random-suffix items together, per base item")
+has("Auctionator knows a price for 1 of your 9 equipped items, 1 of them exact")
+Auctionator = nil
+
 for _, line in ipairs(GearOrSkillProbeLog) do
 	assert(not line:find("error", 1, true), "probe hit an error: " .. line)
 end

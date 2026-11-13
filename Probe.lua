@@ -1,8 +1,8 @@
 -- API probe: answers "what can an addon read in the Forever client?"
 -- Usage: /gos probe (your gear + your target's gear), /gos probe meter (damage meter after a fight),
--- /gos probe clear. Chat shows one verdict per question; the details go to the
--- GearOrSkillProbeLog saved variable.
-local _, ns = ...
+-- /gos probe auctionator (what Auctionator offers other addons), /gos probe clear.
+-- Chat shows one verdict per question; the details go to the GearOrSkillProbeLog saved variable.
+local ADDON, ns = ...
 
 local MAX_LOG = 500
 local FIRST_SLOT, LAST_SLOT = 1, 19
@@ -57,6 +57,42 @@ end
 local function probeClient()
 	local version, build, _, interface = GetBuildInfo()
 	say("info", "Client " .. show(version) .. " (" .. show(build) .. "), interface " .. show(interface))
+end
+
+-- What a shopping list on top of Auctionator could rely on: which of its functions exist in
+-- this build, and whether it prices items with a random suffix ("of the Monkey") one by one.
+local AUCTIONATOR_FUNCTIONS = {
+	"GetAuctionPriceByItemID", "GetAuctionPriceByItemLink", "GetAuctionAgeByItemLink", "GetVendorPriceByItemID",
+	"IsAuctionDataExactByItemLink", "CreateShoppingList", "MultiSearchExact", "RegisterForDBUpdate",
+}
+local function probeAuctionator()
+	local api = Auctionator and Auctionator.API and Auctionator.API.v1
+	if not api then
+		say("info", "Auctionator is not loaded")
+		return
+	end
+	local missing = {}
+	for _, name in ipairs(AUCTIONATOR_FUNCTIONS) do
+		if type(api[name]) ~= "function" then missing[#missing + 1] = name end
+	end
+	say(#missing == 0 and "ok" or "partial", "Auctionator functions: " .. (#missing == 0 and "all present" or "missing " .. table.concat(missing, ", ")))
+	local legacy = Auctionator.Constants and Auctionator.Constants.IsLegacyAH
+	say("info", "Auctionator prices random-suffix items " .. (legacy == true and "one by one" or legacy == false and "together, per base item" or "in an unknown way"))
+	local items, priced, exact = 0, 0, 0
+	for slot = FIRST_SLOT, LAST_SLOT do
+		local link = GetInventoryItemLink("player", slot)
+		if link and not isSecret(link) then
+			items = items + 1
+			local id = tonumber(link:match("item:(%d+)"))
+			local okID, byID = pcall(api.GetAuctionPriceByItemID, ADDON, id)
+			local okLink, byLink = pcall(api.GetAuctionPriceByItemLink, ADDON, link)
+			local okExact, isExact = pcall(api.IsAuctionDataExactByItemLink, ADDON, link)
+			if okLink and byLink then priced = priced + 1 end
+			if okExact and isExact == true then exact = exact + 1 end
+			note("slot " .. slot .. ": " .. link .. " by id=" .. show(okID and byID) .. " by link=" .. show(okLink and byLink) .. " exact=" .. show(okExact and isExact))
+		end
+	end
+	say("info", "Auctionator knows a price for " .. priced .. " of your " .. items .. " equipped items, " .. exact .. " of them exact")
 end
 
 local function probeArmorSkills()
@@ -244,6 +280,8 @@ function ns.Probe(arg)
 	if arg == "clear" then
 		GearOrSkillProbeLog = {}
 		print(PREFIX .. "log cleared")
+	elseif arg == "auctionator" then
+		try("Auctionator", probeAuctionator)
 	elseif arg == "meter" then
 		try("Meter", probeMeter, 1)
 	else
