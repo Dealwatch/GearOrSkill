@@ -143,7 +143,8 @@ eq(#rows, 1, "comparable players"); eq(rows[1].name, "Thrallix", "comparable pla
 near(rows[1].damage, 0.33, "damage difference")
 
 case("item data arriving redraws once per burst, only when something waited for it")
-Stub.timers = {}
+Stub.Fire("GET_ITEM_INFO_RECEIVED", 1, true) -- settle whatever earlier cases left waiting
+Stub.RunTimers()
 Stub.Fire("GET_ITEM_INFO_RECEIVED", 1640, true)
 eq(#Stub.timers, 0, "nothing was waiting, so no redraw")
 S.notLoaded[1640] = true
