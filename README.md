@@ -10,9 +10,9 @@ A World of Warcraft: Forever addon that answers one question: when another playe
 2. Rename the unpacked folder to `GearOrSkill`.
 3. Enable the built-in damage meter: Esc > Options > Advanced Options > Damage Meter.
 4. In game, join a group, target another player and type `/gos`.
-5. Fight something together. The damage meter probe runs by itself two seconds after combat ends. `/gos meter` runs it by hand.
+5. Fight something together. In a group the damage meter probe runs by itself a few seconds after each of the first three fights. `/gos meter` runs it by hand.
 
-The results are printed to chat and saved to `WTF/Account/<account>/SavedVariables/GearOrSkill.lua` when you log out or reload the UI. `/gos clear` empties the log.
+Chat shows one line per question, marked `[OK]`, `[PARTIAL]`, `[BLOCKED]` or `[INFO]`. The details behind each line are saved to `WTF/Account/<account>/SavedVariables/GearOrSkill.lua` when you log out or reload the UI. `/gos clear` empties that log.
 
 ## Development
 
