@@ -1,0 +1,7 @@
+## Interface: 16001
+## Title: GearOrSkill
+## Notes: API probe. Checks what the Forever client lets addons read (inspect, item stats, damage meter).
+## Version: 0.0.1
+## SavedVariables: GearOrSkillProbeLog
+
+Probe.lua
