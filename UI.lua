@@ -2,7 +2,7 @@
 local _, ns = ...
 local Data = ns.Data
 
-local W, H, PAD, TOP = 560, 566, 14, 62
+local W, H, PAD, TOP = 600, 566, 14, 62
 local INNER = W - 2 * PAD - 24 -- drawable width inside the content panel
 local MAX_WEIGHTS, MAX_UPGRADES, MAX_SPELLS, MAX_PLAYERS, MAX_SHOP = 8, 5, 10, 8, 8
 local NOTABLE = 0.05 -- differences below 5% are treated as noise
@@ -212,9 +212,9 @@ function draw.Me()
 	y = y + 12
 	section(y, "Best upgrades for your level")
 	y = y + 18
-	text(0, y, 70, "Slot", C.dim)
-	text(74, y, 146, "Equipped", C.dim)
-	text(224, y, 230, "Upgrade and where to get it", C.dim)
+	text(0, y, 68, "Slot", C.dim)
+	text(72, y, 164, "Equipped", C.dim)
+	text(242, y, INNER - 242 - 54, "Upgrade and where to get it", C.dim)
 	text(INNER - 50, y, 50, "Gain", C.dim, "RIGHT")
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 20
@@ -224,10 +224,10 @@ function draw.Me()
 		local u = upgrades[i]
 		anyUnrated = anyUnrated or u.unrated or u.equippedUnrated
 		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 34, C.stripe) end
-		text(0, y, 70, ns.SLOT_NAME[u.slot])
-		text(74, y, 146, u.equipped .. (u.equippedUnrated and " *" or ""), C.dim)
-		text(224, y, 230, u.item.name .. (u.unrated and " *" or ""))
-		text(224, y + 15, 230, u.item.source, C.dim, "LEFT", GameFontDisableSmall)
+		text(0, y, 68, ns.SLOT_NAME[u.slot])
+		text(72, y, 164, u.equipped .. (u.equippedUnrated and " *" or ""), C.dim)
+		text(242, y, INNER - 242 - 54, u.item.name .. (u.unrated and " *" or ""))
+		text(242, y + 15, INNER - 242 - 54, u.item.source, C.dim, "LEFT", GameFontDisableSmall)
 		text(INNER - 50, y, 50, "+" .. number(u.gain), C.ok, "RIGHT")
 		if u.seen then
 			anySeen = true
@@ -280,7 +280,7 @@ function draw.Group()
 	text(118, y, 30, "Lvl", C.dim, "RIGHT")
 	text(150, y, 80, "Gear", C.dim, "RIGHT")
 	text(236, y, 80, "Damage", C.dim, "RIGHT")
-	text(316, y, 140, "Not explained by gear", C.dim, "RIGHT")
+	text(INNER - 192, y, 140, "Not explained by gear", C.dim, "RIGHT")
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 22
 	text(0, y, 116, "You", classColor(class))
@@ -299,7 +299,7 @@ function draw.Group()
 		text(236, y, 80, percent(row.damage), C.text, "RIGHT")
 		if row.rest then
 			local color = row.rest > NOTABLE and C.bad or row.rest < -NOTABLE and C.ok or C.text
-			text(316, y, 140, percent(row.rest), color, "RIGHT")
+			text(INNER - 192, y, 140, percent(row.rest), color, "RIGHT")
 			bar(INNER - 42, y + 3, 42, 8, math.abs(row.rest) / 0.5, color)
 		end
 		click(-6, y - 3, INNER + 12, 22, function()
@@ -317,7 +317,7 @@ function draw.Group()
 		"Not explained by gear: rotation, talents, buffs, time on target.",
 		calibrated and "The gear estimate is calibrated with the simulator for your profile."
 			or "Rough gear estimate: the simulator has no reference character for your profile or level yet.",
-		"Red: the other player gets more out of the gear. Green: you do. Click a player for the spell view.",
+		"Red: the other player gets more out of the gear. Green: you do. Click a row for the spells.",
 	}
 	if otherLevels then notes[#notes + 1] = "Lvl in yellow: another level than yours. Level alone changes damage, so that gap is not only gear and play." end
 	if leftOut > 0 then notes[#notes + 1] = leftOut .. " player(s) of your class left out: they use different spells." end
@@ -419,10 +419,12 @@ function draw.Shop()
 	end)
 	local y = 48
 	text(0, y, 70, "Slot", C.dim)
-	text(74, y, 196, "Item", C.dim)
-	text(274, y, 70, "Gain", C.dim, "RIGHT")
-	text(350, y, 72, "Price", C.dim, "RIGHT")
-	text(424, y, 84, "Net cost", C.dim, "RIGHT")
+	local gainX, priceX, netX = INNER - 212, INNER - 140, INNER - 70
+	local itemW = gainX - 74 - 2
+	text(74, y, itemW, "Item", C.dim)
+	text(gainX, y, 70, "Gain", C.dim, "RIGHT")
+	text(priceX, y, 68, "Price", C.dim, "RIGHT")
+	text(netX, y, 70, "Net cost", C.dim, "RIGHT")
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 20
 	local shown, anyOld, anyUpTo, anyUnrated = {}, false, false, false
@@ -432,13 +434,13 @@ function draw.Shop()
 		anyOld, anyUpTo, anyUnrated = anyOld or row.old, anyUpTo or row.upTo, anyUnrated or row.unrated
 		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 30, C.stripe) end
 		text(0, y, 70, ns.SLOT_NAME[row.slot])
-		text(74, y, 196, row.name .. (row.unrated and " *" or ""))
-		if row.upTo then text(74, y + 14, 196, "best as \"" .. row.suffix .. "\"", C.dim, "LEFT", GameFontDisableSmall) end
-		text(274, y, 70, (row.upTo and "up to +" or "+") .. number(row.gain), C.ok, "RIGHT")
-		text(350, y, 72, money(row.price), row.old and C.dim or C.text, "RIGHT")
-		if row.old then text(350, y + 14, 72, "(old)", C.dim, "RIGHT", GameFontDisableSmall) end
+		text(74, y, itemW, row.name .. (row.unrated and " *" or ""))
+		if row.upTo then text(74, y + 14, itemW, "best as \"" .. row.suffix .. "\"", C.dim, "LEFT", GameFontDisableSmall) end
+		text(gainX, y, 70, (row.upTo and "up to +" or "+") .. number(row.gain), C.ok, "RIGHT")
+		text(priceX, y, 68, money(row.price), row.old and C.dim or C.text, "RIGHT")
+		if row.old then text(priceX, y + 14, 68, "(old)", C.dim, "RIGHT", GameFontDisableSmall) end
 		local lost = not row.loss and "?" or row.loss == 0 and "free" or money(row.loss)
-		text(424, y, 84, lost, not row.loss and C.dim or row.loss == 0 and C.ok or C.text, "RIGHT")
+		text(netX, y, 70, lost, not row.loss and C.dim or row.loss == 0 and C.ok or C.text, "RIGHT")
 		y = y + 30
 	end
 	y = y + 6
@@ -450,7 +452,7 @@ function draw.Shop()
 	end)
 	y = y + 34
 	if shopNote then y = note(y, shopNote, C.text, GameFontHighlight) + 4 end
-	local notes = { "Net cost: the price minus what a vendor pays you when you sell the item on. ? means not loaded yet." }
+	local notes = { "Net cost: the price minus what a vendor pays you for the item. ? means not loaded yet." }
 	if anyUpTo then notes[#notes + 1] = "up to: the gain with the suffix named under the item; other suffixes are worth less to you. The price is that of the cheapest suffix on sale, so pick the right one in Auctionator." end
 	if anyUnrated then notes[#notes + 1] = UNRATED_NOTE end
 	if anyOld then notes[#notes + 1] = "(old) the price is older than three days." end
