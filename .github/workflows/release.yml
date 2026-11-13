@@ -1,10 +1,11 @@
 name: Release
 
-# A pushed tag (v1.2.3) releases that tag. The daily run refreshes Data.lua from
-# wowsims and, only if it changed, commits it and releases the next patch version.
+# The version in GearOrSkill.toc is the source of truth. A push to main releases that
+# version if it has no release yet. The daily run refreshes Data.lua from wowsims and,
+# only if it changed, raises the patch version, commits and releases.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   schedule:
     - cron: "17 5 * * *"
   workflow_dispatch:
@@ -12,15 +13,15 @@ on:
 permissions:
   contents: write
 
+concurrency: release
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Refresh data from wowsims
-        if: github.ref_type != 'tag'
+        if: github.event_name != 'push'
         run: |
           git clone --quiet --depth 1 https://github.com/wowsims/forever "$RUNNER_TEMP/wowsims"
           python3 tools/build_data.py "$RUNNER_TEMP/wowsims"

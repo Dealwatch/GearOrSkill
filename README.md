@@ -58,7 +58,7 @@ Render the window to HTML pages for a visual check (needs the Python package `lu
 python3 tools/render_ui.py /tmp/gearorskill-ui
 ```
 
-Releases: push a tag such as `v0.2.0`. The workflow tests, packages and publishes it.
+Releases: raise `## Version` in `GearOrSkill.toc` and push to `main`. The workflow tests, packages and publishes any version that has no release yet.
 
 ## Credits
 
