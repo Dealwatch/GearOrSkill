@@ -45,6 +45,8 @@ VIEWS = [
     ("meter-problem", 'ns.fightProblem = "The game kept the damage meter values locked after the fight."; ns.ShowTab("Group")'),
     ("me-no-weights", 'Stub.state.units.player.class, Stub.state.units.player.className = "MAGE", "Mage"; ns.ShowTab("Me")'),
     ("shop-no-weights", 'ns.ShowTab("Shop")'),
+    ("me-star", 'Stub.state.units.player.class, Stub.state.units.player.className = "SHAMAN", "Shaman"; GearOrSkillDB.profile = 2; '
+                'Stub.state.gear.player = { [16] = Stub.link("Ironforge Greathammer") }; Stub.state.level = 19; ns.ShowTab("Me")'),
     ("hunter-me", 'Stub.state.units.player.class, Stub.state.units.player.className = "HUNTER", "Hunter"; '
                   'GearOrSkillDB.profile = 1; Stub.state.gear.player = {}; Stub.state.level = 19; ns.ShowTab("Me")'),
     ("hunter-shop", 'Auctionator = Stub.Auctionator; Stub.auctionPrice = function(id) return id % 5 == 0 and 2000 + (id * 37) % 60000 or nil end; ns.ShowTab("Shop")'),

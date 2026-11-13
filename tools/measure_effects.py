@@ -163,14 +163,14 @@ def main():
     for cls, profiles in (generated.Effects or {}).items():
         for name, values in profiles.items():
             known[(cls, name)] = dict(values.items())
-    if datetime.date.today().weekday() == 0:  # Monday: try again what the simulator did not play
-        known = {key: {i: v for i, v in values.items() if v > 0} for key, values in known.items()}
+    # Monday: try again what the simulator did not play. Until re-measured, the old zero stays.
+    recheck = datetime.date.today().weekday() == 0
 
     budget, pending, result = MAX_PER_RUN, 0, {}
     for cls, name, build, player, per_point, profile in references(sim, cli, stats, generated):
         values = result.setdefault((cls, name), dict(known.get((cls, name), {})))
         todo = [(item, twin_of(item, plain)) for item in sorted(candidates(items, cls, weapons, ranged, class_ids, profile), key=lambda i: i["id"])
-                if item["id"] not in values]
+                if item["id"] not in values or (recheck and values[item["id"]] == 0)]
         todo = [(item, twin) for item, twin in todo if twin]  # no twin: cannot be measured, stays unrated
         if not todo or budget <= 0:
             pending += len(todo)

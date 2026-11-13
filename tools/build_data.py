@@ -28,9 +28,15 @@ RAID_OPENS = {
     "Molten Core": None, "Blackwing Lair": None, "Zul'Gurub": None, "Ruins of Ahn'Qiraj": None,
     "Ahn'Qiraj": None, "Naxxramas": None,
 }
-# ponytail: many quest rewards carry no required level. Assume they are for characters about
-# five levels below their item level, which keeps endgame rewards away from low levels.
+# ponytail: many quest rewards carry no required level (none, or 1). Assume they are for
+# characters about five levels below their item level, which keeps a level 35 class quest
+# weapon away from a level 19 character.
 ITEM_LEVEL_LEAD = 5
+
+
+def required_level(item, ilvl):
+    stated = item.get("reqLvl") or 0
+    return stated if stated > 1 else max(1, ilvl - ITEM_LEVEL_LEAD)
 
 GENERIC_SPEC_DIRS = {"dps", "healer", "shared"}
 PSEUDO_KEYS = {"PseudoStatMainHandDps": "mh", "PseudoStatOffHandDps": "oh", "PseudoStatRangedDps": "rg"}
@@ -174,7 +180,7 @@ def build(sim, today):
         source = obtainable_source(item, ilvl, db["zone"], phase, today)
         fields = [
             item["type"], item.get("armorType", 0), item.get("weaponType", 0), item.get("handType", 0),
-            item.get("rangedWeaponType", 0), item.get("reqLvl") or max(1, ilvl - ITEM_LEVEL_LEAD), ilvl, "%g" % dps, scaling.get("randPropPoints", 0),
+            item.get("rangedWeaponType", 0), required_level(item, ilvl), ilvl, "%g" % dps, scaling.get("randPropPoints", 0),
             ",".join(classes[c] for c in item.get("classAllowlist") or [] if c in classes) or "-",
             sparse(item_stats), item["name"], source_text(source or (item.get("sources") or [None])[0], db, professions),
             ",".join(str(s) for s in item.get("randomSuffixOptions") or []) or "-",
