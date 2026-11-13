@@ -87,9 +87,18 @@ ns.ForgetUsable()
 eq(ns.CanUse(top.id), true, "until forgotten, for example after learning a skill")
 S.notLoaded[top.id] = true
 ns.ForgetUsable()
-eq(ns.CanUse(top.id), true, "an item still loading counts as usable")
+eq(ns.CanUse(top.id), nil, "an item the game has not loaded gets no verdict")
+assert(Stub.requested[top.id], "and is asked for")
+for _, u in ipairs(ns.Upgrades(S.gear.player, "SHAMAN", 60, profile)) do
+	assert(u.item.id ~= top.id, "an item without a verdict was suggested")
+end
+Stub.timers = {}
+Stub.Fire("ITEM_DATA_LOAD_RESULT", top.id, true)
+eq(#Stub.timers, 1, "its arrival schedules a redraw")
+Stub.RunTimers()
 S.notLoaded = {}
-eq(ns.CanUse(top.id), true, "and is judged for real once loaded")
+eq(ns.CanUse(top.id), true, "and it is judged for real once loaded")
+eq(ns.Upgrades(S.gear.player, "SHAMAN", 60, profile)[1].item.id, top.id, "and suggested again")
 local function wearsMail(level)
 	for _, u in ipairs(ns.Upgrades({}, "SHAMAN", level, profile)) do
 		if u.item.armor == 3 then return true end
@@ -130,14 +139,20 @@ local rows, leftOut = ns.Compare(fight, profile)
 eq(#rows, 1, "comparable players"); eq(rows[1].name, "Thrallix", "comparable player"); eq(leftOut, 1, "same class, other spec")
 near(rows[1].damage, 0.33, "damage difference")
 
-case("item data arriving redraws once per burst; failed loads do not")
+case("item data arriving redraws once per burst, only when something waited for it")
 Stub.timers = {}
+Stub.Fire("GET_ITEM_INFO_RECEIVED", 1640, true)
+eq(#Stub.timers, 0, "nothing was waiting, so no redraw")
+S.notLoaded[1640] = true
+eq(ns.CanUse(1640), nil, "an unloaded item makes the window wait")
+Stub.Fire("GET_ITEM_INFO_RECEIVED", 999999999, false)
+eq(#Stub.timers, 0, "no redraw for a failed load")
 Stub.Fire("GET_ITEM_INFO_RECEIVED", 1640, true)
 Stub.Fire("GET_ITEM_INFO_RECEIVED", 1641, true)
 eq(#Stub.timers, 1, "one redraw for a burst of loaded items")
 Stub.RunTimers()
-Stub.Fire("GET_ITEM_INFO_RECEIVED", 999999999, false)
-eq(#Stub.timers, 0, "no redraw for a failed load")
+S.notLoaded = {}
+ns.ForgetUsable()
 
 case("gear difference and the part it does not explain")
 rows = ns.Compare(fight, profile)

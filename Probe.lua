@@ -109,19 +109,21 @@ local function probeUsable()
 		return
 	end
 	local _, class = UnitClass("player")
-	local level, found = UnitLevel("player"), {}
+	local level, found, loading = UnitLevel("player"), {}, false
 	for _, id in ipairs(ns.Data.slots[13] or {}) do
 		local item = ns.Item(id)
 		local kind = item and WEAPON_NAMES[item.weapon] and (item.hand == 4 and "two-hand " or "") .. WEAPON_NAMES[item.weapon]
 		if kind and found[kind] == nil and item.reqLvl <= level and ns.Data.weapons[class] and ns.Data.weapons[class][item.weapon] then
-			found[kind] = ns.CanUse(id) and "yes" or "no"
+			local usable = ns.CanUse(id)
+			found[kind] = usable == nil and "not loaded" or usable and "yes" or "no"
+			if usable == nil then loading = true end
 			note("tooltip check " .. kind .. ": " .. item.name .. " (" .. id .. ") usable=" .. found[kind])
 		end
 	end
 	local parts = {}
 	for kind, verdict in pairs(found) do parts[#parts + 1] = kind .. " " .. verdict end
 	table.sort(parts)
-	say("info", "Weapons you can use, by tooltip: " .. table.concat(parts, ", "))
+	say("info", "Weapons you can use, by tooltip: " .. table.concat(parts, ", ") .. (loading and ". Run /gos probe again for those not loaded" or ""))
 end
 
 local function probeGear(unit, who)

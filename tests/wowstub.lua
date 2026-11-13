@@ -205,6 +205,8 @@ C_CVar = { GetCVarBool = function() return true end }
 C_Item = {
 	GetItemStats = function(link) if not link:find("Shirt") then return { ITEM_MOD_STRENGTH_SHORT = 5 } end end,
 	DoesItemExistByID = function(id) return not S.missingItems[id] end,
+	IsItemDataCachedByID = function(id) return not S.notLoaded[id] end,
+	RequestLoadItemDataByID = function(id) Stub.requested = Stub.requested or {}; Stub.requested[id] = true end,
 	GetItemInfo = function(id) return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, S.sellPrice and S.sellPrice(id) end,
 }
 function IsSpellKnown(id) return S.knownSpells[id] == true end

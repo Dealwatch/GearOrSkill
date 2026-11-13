@@ -151,9 +151,12 @@ end
 -- Whether this character can use an item right now, by the game's own verdict: its tooltip
 -- prints in red whatever stands in the way (weapon or armor type not learned, level, class,
 -- skill). The class rules above only say what a class can ever learn.
--- Unknown (item not loaded yet, tooltip data unavailable) counts as usable.
+-- Returns true or false, or nil while the game has not loaded the item yet: the verdict would
+-- be a guess, so such an item is asked for and left out until its data arrives.
+-- Where the game offers no tooltip data at all, everything counts as usable.
 local USABLE_TRIES = 25 -- candidates checked per slot before giving up
 local usableCache = {}
+local waitingForItems = false -- something drawn lacked item data; redraw when it arrives
 
 local function isRed(color)
 	return type(color) == "table" and color.r > 0.9 and color.g < 0.3 and color.b < 0.3
@@ -162,9 +165,14 @@ end
 function ns.CanUse(id)
 	if usableCache[id] ~= nil then return usableCache[id] end
 	if not C_TooltipInfo or not C_TooltipInfo.GetItemByID then return true end
+	if not C_Item.IsItemDataCachedByID(id) then
+		C_Item.RequestLoadItemDataByID(id)
+		waitingForItems = true
+		return nil
+	end
 	local ok, verdict = pcall(function()
 		local data = C_TooltipInfo.GetItemByID(id)
-		if type(data) ~= "table" or type(data.lines) ~= "table" or #data.lines == 0 then return nil end
+		if type(data) ~= "table" or type(data.lines) ~= "table" or #data.lines == 0 then return true end
 		for _, line in ipairs(data.lines) do
 			if line.leftText == RETRIEVING_ITEM_INFO then return nil end
 			if line.isValidInvSlot == false or line.isValidItemType == false or isRed(line.leftColor) or isRed(line.rightColor) then
@@ -173,7 +181,11 @@ function ns.CanUse(id)
 		end
 		return true
 	end)
-	if not ok or verdict == nil then return true end
+	if not ok then return true end
+	if verdict == nil then
+		waitingForItems = true
+		return nil
+	end
 	usableCache[id] = verdict
 	return verdict
 end
@@ -225,7 +237,7 @@ function ns.Upgrades(links, class, level, profile)
 		table.sort(list, function(a, b) return a.gain > b.gain end)
 		for i = 1, math.min(USABLE_TRIES, #list) do
 			local entry = list[i]
-			if ns.CanUse(entry.item.id) then
+			if ns.CanUse(entry.item.id) == true then
 				results[#results + 1] = {
 					slot = slot, equipped = equipped[slot] and equipped[slot].name or "empty", item = entry.item, gain = entry.gain,
 					seen = GearOrSkillSeen ~= nil and GearOrSkillSeen[entry.item.id] == true,
@@ -260,6 +272,7 @@ local function price(id)
 	if not ok or type(copper) ~= "number" or copper <= 0 then return nil end
 	local _, age = ask("GetAuctionAgeByItemID", id)
 	local sells = select(11, C_Item.GetItemInfo(id))
+	if sells == nil then waitingForItems = true end -- the vendor value comes with the item data
 	return copper, type(age) == "number" and age or nil, type(sells) == "number" and sells > 0 and sells or nil
 end
 
@@ -302,7 +315,7 @@ function ns.ShopList(links, class, level, profile, byValue)
 	local kept, perSlot = {}, {}
 	for _, row in ipairs(rows) do
 		local slotName = ns.SLOT_NAME[row.slot]
-		if (perSlot[slotName] or 0) < SHOP_PER_SLOT and ns.CanUse(row.id) then
+		if (perSlot[slotName] or 0) < SHOP_PER_SLOT and ns.CanUse(row.id) == true then
 			perSlot[slotName] = (perSlot[slotName] or 0) + 1
 			kept[#kept + 1] = row
 		end
@@ -568,7 +581,7 @@ local redrawPending = false
 local frame = CreateFrame("Frame")
 for _, event in ipairs({
 	"INSPECT_READY", "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_EQUIPMENT_CHANGED",
-	"PLAYER_LEVEL_UP", "GET_ITEM_INFO_RECEIVED",
+	"PLAYER_LEVEL_UP", "GET_ITEM_INFO_RECEIVED", "ITEM_DATA_LOAD_RESULT",
 }) do
 	frame:RegisterEvent(event)
 end
@@ -583,13 +596,14 @@ frame:SetScript("OnEvent", function(_, event, arg, success)
 	elseif event == "PLAYER_LEVEL_UP" then
 		ns.ForgetUsable()
 		if ns.OnGear then ns.OnGear() end
-	elseif event == "GET_ITEM_INFO_RECEIVED" then
-		-- Item data arrives in bursts; redraw once, shortly after, so prices and verdicts fill in.
+	elseif event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_DATA_LOAD_RESULT" then
+		-- Item data arrives in bursts; if something drawn was waiting for it, redraw once, shortly
+		-- after, so prices and verdicts fill in.
 		-- A failed load is ignored: asking again on the redraw would loop forever.
-		if success ~= false and not redrawPending then
+		if success ~= false and waitingForItems and not redrawPending then
 			redrawPending = true
 			C_Timer.After(0.5, function()
-				redrawPending = false
+				redrawPending, waitingForItems = false, false
 				if ns.OnGear then ns.OnGear() end
 			end)
 		end
