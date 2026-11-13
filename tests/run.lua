@@ -71,6 +71,25 @@ for _, u in ipairs(ns.Upgrades(S.gear.player, "SHAMAN", 60, profile)) do
 	assert(u.item.id ~= top.id, "an item the client does not have was suggested")
 end
 S.missingItems = {}
+-- The tooltip verdict: an item shown in red is skipped and the next best one of the slot is offered.
+ns.ForgetUsable()
+local topSlot, runnerUp = at60[1].slot, nil
+S.cannotUse[top.id] = true
+for _, u in ipairs(ns.Upgrades(S.gear.player, "SHAMAN", 60, profile)) do
+	assert(u.item.id ~= top.id, "an item the tooltip marks as unusable was suggested")
+	if u.slot == topSlot then runnerUp = u end
+end
+assert(runnerUp and runnerUp.gain <= at60[1].gain, "the slot should fall back to its next best item")
+eq(ns.CanUse(top.id), false, "verdict from the tooltip")
+S.cannotUse = {}
+eq(ns.CanUse(top.id), false, "verdicts are remembered")
+ns.ForgetUsable()
+eq(ns.CanUse(top.id), true, "until forgotten, for example after learning a skill")
+S.notLoaded[top.id] = true
+ns.ForgetUsable()
+eq(ns.CanUse(top.id), true, "an item still loading counts as usable")
+S.notLoaded = {}
+eq(ns.CanUse(top.id), true, "and is judged for real once loaded")
 local function wearsMail(level)
 	for _, u in ipairs(ns.Upgrades({}, "SHAMAN", level, profile)) do
 		if u.item.armor == 3 then return true end
@@ -110,6 +129,15 @@ eq(#fight.others, 3, "other players in the fight"); eq(fight.me.total, 60000, "o
 local rows, leftOut = ns.Compare(fight, profile)
 eq(#rows, 1, "comparable players"); eq(rows[1].name, "Thrallix", "comparable player"); eq(leftOut, 1, "same class, other spec")
 near(rows[1].damage, 0.33, "damage difference")
+
+case("item data arriving redraws once per burst; failed loads do not")
+Stub.timers = {}
+Stub.Fire("GET_ITEM_INFO_RECEIVED", 1640, true)
+Stub.Fire("GET_ITEM_INFO_RECEIVED", 1641, true)
+eq(#Stub.timers, 1, "one redraw for a burst of loaded items")
+Stub.RunTimers()
+Stub.Fire("GET_ITEM_INFO_RECEIVED", 999999999, false)
+eq(#Stub.timers, 0, "no redraw for a failed load")
 
 case("gear difference and the part it does not explain")
 rows = ns.Compare(fight, profile)
@@ -266,6 +294,14 @@ eq(suffixed.suffix, bestName, "a suffix item names its best suffix")
 near(suffixed.gain, best - (wornSlots[suffixed.slot] and wornSlots[suffixed.slot].score or 0), "a suffix item shows the gain of its best suffix")
 eq(ns.Item(fixed.id).suffixes, "-", "fixed items have no suffix options")
 
+S.cannotUse[shop[1].id] = true
+ns.ForgetUsable()
+for _, row in ipairs(ns.ShopList(S.gear.player, "SHAMAN", 60, profile, false)) do
+	assert(row.id ~= shop[1].id, "the shop listed an item the tooltip marks as unusable")
+end
+S.cannotUse = {}
+ns.ForgetUsable()
+
 case("shop: sorting by value for money, and nothing without prices")
 local byValue = ns.ShopList(S.gear.player, "SHAMAN", 60, profile, true)
 for i = 2, #byValue do
@@ -320,6 +356,7 @@ SlashCmdList.GEARORSKILL("probe")
 Stub.Fire("INSPECT_READY", Stub.guids.thrallix)
 Stub.RunTimers()
 has("Armor skills at level 60: mail no, plate no")
+has("Weapons you can use, by tooltip: ")
 has("[OK]|r Your gear: 9 items, 9 with readable stats")
 has("[OK]|r Target Thrallix: 9 items, 9 with readable stats")
 has("Target talents: spec id 0, talent data no")

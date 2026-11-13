@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: GearOrSkill
 ## Notes: Compares you with players of your class and spec: how much of the damage gap is gear, how much is play.
-## Version: 0.4.1
+## Version: 0.4.2
 ## OptionalDeps: Auctionator
 ## SavedVariables: GearOrSkillSeen, GearOrSkillProbeLog
 ## SavedVariablesPerCharacter: GearOrSkillDB

@@ -476,6 +476,7 @@ local function toggle()
 		main:Hide()
 	else
 		main:Show()
+		ns.ForgetUsable() -- a weapon skill may have been learned since the window was last open
 		ns.QueueInspects()
 		ns.ShowTab()
 	end

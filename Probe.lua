@@ -100,6 +100,30 @@ local function probeArmorSkills()
 	say("info", "Armor skills at level " .. show(UnitLevel("player")) .. ": mail " .. known(8737) .. ", plate " .. known(750))
 end
 
+-- Does the game's tooltip tell what this character cannot use? Checks the first weapon of
+-- each kind the class can learn; the equipped kind should come out as usable.
+local WEAPON_NAMES = { [1] = "axe", [2] = "dagger", [3] = "fist", [4] = "mace", [6] = "polearm", [8] = "staff", [9] = "sword" }
+local function probeUsable()
+	if not C_TooltipInfo or not C_TooltipInfo.GetItemByID then
+		say("info", "Tooltip check: the game offers no tooltip data to addons")
+		return
+	end
+	local _, class = UnitClass("player")
+	local level, found = UnitLevel("player"), {}
+	for _, id in ipairs(ns.Data.slots[13] or {}) do
+		local item = ns.Item(id)
+		local kind = item and WEAPON_NAMES[item.weapon] and (item.hand == 4 and "two-hand " or "") .. WEAPON_NAMES[item.weapon]
+		if kind and found[kind] == nil and item.reqLvl <= level and ns.Data.weapons[class] and ns.Data.weapons[class][item.weapon] then
+			found[kind] = ns.CanUse(id) and "yes" or "no"
+			note("tooltip check " .. kind .. ": " .. item.name .. " (" .. id .. ") usable=" .. found[kind])
+		end
+	end
+	local parts = {}
+	for kind, verdict in pairs(found) do parts[#parts + 1] = kind .. " " .. verdict end
+	table.sort(parts)
+	say("info", "Weapons you can use, by tooltip: " .. table.concat(parts, ", "))
+end
+
 local function probeGear(unit, who)
 	local links, withStats, secrets = 0, 0, 0
 	for slot = FIRST_SLOT, LAST_SLOT do
@@ -287,6 +311,7 @@ function ns.Probe(arg)
 	else
 		try("Client", probeClient)
 		try("Armor skills", probeArmorSkills)
+		try("Tooltip check", probeUsable)
 		try("Your gear", probeGear, "player", "Your gear")
 		try("Target", probeTarget)
 	end

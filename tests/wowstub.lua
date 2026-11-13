@@ -165,6 +165,8 @@ Stub.state = {
 	duration = 102,
 	sheet = { 240, 130, 260, 170, 120 }, -- character sheet: strength, agility, stamina, intellect, spirit
 	missingItems = {}, -- item ids this client does not have
+	cannotUse = {}, -- item ids whose tooltip shows red
+	notLoaded = {}, -- item ids the client is still loading
 	knownSpells = {},
 }
 local S = Stub.state
@@ -206,6 +208,16 @@ C_Item = {
 	GetItemInfo = function(id) return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, S.sellPrice and S.sellPrice(id) end,
 }
 function IsSpellKnown(id) return S.knownSpells[id] == true end
+RETRIEVING_ITEM_INFO = "Retrieving item information"
+-- Tooltip data: red where the test says the character cannot use the item.
+C_TooltipInfo = { GetItemByID = function(id)
+	if S.notLoaded[id] then return { lines = { { leftText = RETRIEVING_ITEM_INFO, leftColor = { r = 1, g = 0.13, b = 0.13 } } } } end
+	local white, red = { r = 1, g = 1, b = 1 }, { r = 1, g = 0.13, b = 0.13 }
+	return { lines = {
+		{ leftText = "Item " .. id, leftColor = white },
+		{ leftText = "Two-Hand", rightText = "Axe", leftColor = white, rightColor = S.cannotUse[id] and red or white },
+	} }
+end }
 C_SpecializationInfo = { GetInspectSpecialization = function() return 0 end }
 C_Traits = { HasValidInspectData = function() return false end }
 C_Spell = { GetSpellName = function(id) return S.spellNames and S.spellNames[id] or ("Spell " .. id) end }

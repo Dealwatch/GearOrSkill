@@ -148,6 +148,41 @@ local function usable(item, class, level, slot)
 	return true
 end
 
+-- Whether this character can use an item right now, by the game's own verdict: its tooltip
+-- prints in red whatever stands in the way (weapon or armor type not learned, level, class,
+-- skill). The class rules above only say what a class can ever learn.
+-- Unknown (item not loaded yet, tooltip data unavailable) counts as usable.
+local USABLE_TRIES = 25 -- candidates checked per slot before giving up
+local usableCache = {}
+
+local function isRed(color)
+	return type(color) == "table" and color.r > 0.9 and color.g < 0.3 and color.b < 0.3
+end
+
+function ns.CanUse(id)
+	if usableCache[id] ~= nil then return usableCache[id] end
+	if not C_TooltipInfo or not C_TooltipInfo.GetItemByID then return true end
+	local ok, verdict = pcall(function()
+		local data = C_TooltipInfo.GetItemByID(id)
+		if type(data) ~= "table" or type(data.lines) ~= "table" or #data.lines == 0 then return nil end
+		for _, line in ipairs(data.lines) do
+			if line.leftText == RETRIEVING_ITEM_INFO then return nil end
+			if line.isValidInvSlot == false or line.isValidItemType == false or isRed(line.leftColor) or isRed(line.rightColor) then
+				return false
+			end
+		end
+		return true
+	end)
+	if not ok or verdict == nil then return true end
+	usableCache[id] = verdict
+	return verdict
+end
+
+-- What was learned since the last look (a weapon skill, a level) may change the verdicts.
+function ns.ForgetUsable()
+	usableCache = {}
+end
+
 -- Walks every item of the given lists (item type -> ids) that the character could wear in an
 -- upgrade slot and calls fn(slot, item, replaced): replaced is the score of what it would
 -- replace there. Returns the per-slot details of the equipped gear.
@@ -177,17 +212,27 @@ end
 
 -- Best obtainable item per slot compared with what is equipped, biggest gain first.
 function ns.Upgrades(links, class, level, profile)
-	local best = {}
+	local better = {} -- slot -> every candidate that beats the equipped item
 	local equipped = forCandidates(links, class, level, profile, Data.slots, function(slot, item, replaced)
 		local gain = ns.ItemScore(item, profile, slot) - replaced
-		if gain > (best[slot] and best[slot].gain or 0) then best[slot] = { item = item, gain = gain } end
+		if gain > 0 then
+			better[slot] = better[slot] or {}
+			table.insert(better[slot], { item = item, gain = gain })
+		end
 	end)
 	local results = {}
-	for slot, entry in pairs(best) do
-		results[#results + 1] = {
-			slot = slot, equipped = equipped[slot] and equipped[slot].name or "empty", item = entry.item, gain = entry.gain,
-			seen = GearOrSkillSeen ~= nil and GearOrSkillSeen[entry.item.id] == true,
-		}
+	for slot, list in pairs(better) do
+		table.sort(list, function(a, b) return a.gain > b.gain end)
+		for i = 1, math.min(USABLE_TRIES, #list) do
+			local entry = list[i]
+			if ns.CanUse(entry.item.id) then
+				results[#results + 1] = {
+					slot = slot, equipped = equipped[slot] and equipped[slot].name or "empty", item = entry.item, gain = entry.gain,
+					seen = GearOrSkillSeen ~= nil and GearOrSkillSeen[entry.item.id] == true,
+				}
+				break
+			end
+		end
 	end
 	table.sort(results, function(a, b) return a.gain > b.gain end)
 	return results
@@ -257,8 +302,10 @@ function ns.ShopList(links, class, level, profile, byValue)
 	local kept, perSlot = {}, {}
 	for _, row in ipairs(rows) do
 		local slotName = ns.SLOT_NAME[row.slot]
-		perSlot[slotName] = (perSlot[slotName] or 0) + 1
-		if perSlot[slotName] <= SHOP_PER_SLOT then kept[#kept + 1] = row end
+		if (perSlot[slotName] or 0) < SHOP_PER_SLOT and ns.CanUse(row.id) then
+			perSlot[slotName] = (perSlot[slotName] or 0) + 1
+			kept[#kept + 1] = row
+		end
 	end
 	return kept
 end
@@ -517,11 +564,15 @@ function ns.Profile()
 	return list[GearOrSkillDB.profile] or list[1], list
 end
 
+local redrawPending = false
 local frame = CreateFrame("Frame")
-for _, event in ipairs({ "INSPECT_READY", "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_EQUIPMENT_CHANGED" }) do
+for _, event in ipairs({
+	"INSPECT_READY", "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_EQUIPMENT_CHANGED",
+	"PLAYER_LEVEL_UP", "GET_ITEM_INFO_RECEIVED",
+}) do
 	frame:RegisterEvent(event)
 end
-frame:SetScript("OnEvent", function(_, event, arg)
+frame:SetScript("OnEvent", function(_, event, arg, success)
 	if event == "INSPECT_READY" then
 		onInspectReady(arg)
 	elseif event == "PLAYER_REGEN_ENABLED" then
@@ -529,6 +580,19 @@ frame:SetScript("OnEvent", function(_, event, arg)
 		ns.QueueInspects()
 	elseif event == "PLAYER_EQUIPMENT_CHANGED" then
 		if ns.OnGear then ns.OnGear() end
+	elseif event == "PLAYER_LEVEL_UP" then
+		ns.ForgetUsable()
+		if ns.OnGear then ns.OnGear() end
+	elseif event == "GET_ITEM_INFO_RECEIVED" then
+		-- Item data arrives in bursts; redraw once, shortly after, so prices and verdicts fill in.
+		-- A failed load is ignored: asking again on the redraw would loop forever.
+		if success ~= false and not redrawPending then
+			redrawPending = true
+			C_Timer.After(0.5, function()
+				redrawPending = false
+				if ns.OnGear then ns.OnGear() end
+			end)
+		end
 	else
 		ns.QueueInspects()
 	end
