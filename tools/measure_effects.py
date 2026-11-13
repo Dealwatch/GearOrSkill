@@ -70,13 +70,16 @@ def references(sim, cli, stats, generated):
 
 
 def candidates(items, cls, weapons, ranged, class_ids, profile):
-    """Weapons with an effect this class can use. Ranged ones only where ranged damage counts."""
+    """Weapons with an effect this class can use. Ranged ones only where ranged damage counts,
+    melee ones not for profiles that only shoot."""
     for item in items:
         if not item.get("itemEffects") or item.get("randomSuffixOptions") or item.get("quality", 0) < 2:
             continue
         if item.get("classAllowlist") and class_ids[cls] not in item["classAllowlist"]:
             continue
         if item.get("type") == WEAPON and item.get("handType") != OFF_HAND_ONLY:
+            if profile.get("rg") and not profile.get("mh"):
+                continue  # a ranged profile does not swing its melee weapon; a melee effect is worth nothing to it
             skill = weapons[cls].get(item.get("weaponType"))
             if skill and (item.get("handType") != TWO_HAND or skill == 2) and scaling(item).get("unroundedDps"):
                 yield item
