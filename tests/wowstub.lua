@@ -183,7 +183,7 @@ function UnitIsPlayer(unit) return S.units[unit] ~= nil end
 function UnitGUID(unit) return S.units[unit] and S.units[unit].guid end
 function UnitName(unit) return S.units[unit] and S.units[unit].name end
 function UnitClass(unit) local u = S.units[unit] if u then return u.className or u.class, u.class end end
-function UnitLevel() return S.level end
+function UnitLevel(unit) return S.units[unit] and S.units[unit].level or S.level end
 function UnitStat(_, index) local value = S.sheet[index] or 0 return value, value, 0, 0 end
 function CanInspect(unit) return S.units[unit] ~= nil end
 function NotifyInspect(unit) Stub.inspected = unit end

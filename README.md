@@ -9,10 +9,10 @@ A World of Warcraft: Forever addon that answers one question: when another playe
 Open the window with `/gos` or from the addon menu at the minimap.
 
 - **Me**: what each stat point is worth for your spec, your gear score, and the best upgrades you can get at your level with where they come from. Upgrades marked "seen" are worn by a player you inspected, so they can be obtained.
-- **Group**: after each fight, every group member of your class who uses the same spells as you, with their gear difference, their damage difference, and the part gear does not explain.
+- **Group**: after each fight, every group member of your class who uses the same spells as you, with their level, their gear difference, their damage difference, and the part gear does not explain. Players of another level are marked, since level alone changes damage.
 - **Fight**: you against one of those players, spell by spell, as a share of total damage. The biggest gap is highlighted.
 
-- **Shop**: upgrades the [Auctionator](https://www.curseforge.com/wow/addons/auctionator) addon has seen at the auction house, with their price and what you lose if you later sell the item to a vendor. One click hands the list to Auctionator, which searches it live. Auctionator is optional; without it only this tab stays empty.
+- **Shop**: upgrades the [Auctionator](https://www.curseforge.com/wow/addons/auctionator) addon has seen at the auction house, with their price and their net cost: the price minus what a vendor pays you when you sell the item on. One click hands the list to Auctionator, which searches it live. Auctionator is optional; without it only this tab stays empty.
 
 The Group and Fight tabs need the game's built-in damage meter to be turned on.
 

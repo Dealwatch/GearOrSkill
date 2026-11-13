@@ -33,7 +33,7 @@ VIEWS = [
     ("fight", 'ns.ShowTab("Fight")'),
     ("shop", 'ns.ShowTab("Shop")'),
     ("me-level-20", 'Stub.state.level = 20; ns.ShowTab("Me")'),
-    ("group-level-20", 'ns.ShowTab("Group")'),
+    ("group-level-20", 'Stub.state.units.party1.level = 23; Stub.Fire("PLAYER_REGEN_ENABLED"); Stub.RunTimers(); ns.ShowTab("Group")'),
     ("shop-level-20", 'ns.ShowTab("Shop")'),
     ("no-fight", 'Stub.state.level = 60; ns.lastFight = nil; ns.ShowTab("Group")'),
 ]

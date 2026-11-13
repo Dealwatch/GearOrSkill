@@ -244,20 +244,26 @@ function draw.Group()
 	local rows, leftOut, calibrated = ns.Compare(fight, (ns.Profile()))
 	fightHeader(fight, "Players like you", "same class, same spells")
 	local y = 34
-	text(0, y, 150, "Player", C.dim)
+	local myLevel, otherLevels = fight.me.level or UnitLevel("player"), false
+	text(0, y, 116, "Player", C.dim)
+	text(118, y, 30, "Lvl", C.dim, "RIGHT")
 	text(150, y, 80, "Gear", C.dim, "RIGHT")
 	text(236, y, 80, "Damage", C.dim, "RIGHT")
 	text(316, y, 140, "Not explained by gear", C.dim, "RIGHT")
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 22
-	text(0, y, 150, "You", classColor(class))
+	text(0, y, 116, "You", classColor(class))
+	text(118, y, 30, tostring(myLevel), C.dim, "RIGHT")
 	text(150, y, 80, "baseline", C.dim, "RIGHT")
 	text(236, y, 80, number(fight.me.total), C.dim, "RIGHT")
 	y = y + 22
 	for i = 1, math.min(MAX_PLAYERS, #rows) do
 		local row = rows[i]
 		if i % 2 == 1 then rect(-6, y - 3, INNER + 12, 22, C.stripe) end
-		text(0, y, 150, row.name, classColor(class))
+		local differs = row.level ~= nil and row.level ~= myLevel
+		otherLevels = otherLevels or differs
+		text(0, y, 116, row.name, classColor(class))
+		text(118, y, 30, row.level and tostring(row.level) or "?", differs and C.gold or C.dim, "RIGHT")
 		text(150, y, 80, row.gear and percent(row.gear) or "not seen", row.gear and C.text or C.dim, "RIGHT")
 		text(236, y, 80, percent(row.damage), C.text, "RIGHT")
 		if row.rest then
@@ -283,6 +289,7 @@ function draw.Group()
 			or "Rough gear estimate: the simulator has no reference character for your profile or level yet.",
 		"Red: the other player gets more out of the gear. Green: you do. Click a player for the spell view.",
 	}
+	if otherLevels then notes[#notes + 1] = "Lvl in yellow: another level than yours. Level alone changes damage, so that gap is not only gear and play." end
 	if leftOut > 0 then notes[#notes + 1] = leftOut .. " player(s) of your class left out: they use different spells." end
 	for _, line in ipairs(notes) do
 		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
@@ -392,7 +399,7 @@ function draw.Shop()
 	text(74, y, 196, "Item", C.dim)
 	text(274, y, 70, "Gain", C.dim, "RIGHT")
 	text(350, y, 72, "Price", C.dim, "RIGHT")
-	text(424, y, 84, "Lost if resold", C.dim, "RIGHT")
+	text(424, y, 84, "Net cost", C.dim, "RIGHT")
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 20
 	local shown, anyOld, anyUpTo = {}, false, false
@@ -406,7 +413,7 @@ function draw.Shop()
 		if row.upTo then text(74, y + 14, 196, "random suffix, check the stats", C.dim, "LEFT", GameFontDisableSmall) end
 		text(274, y, 70, (row.upTo and "up to +" or "+") .. number(row.gain), C.ok, "RIGHT")
 		text(350, y, 72, money(row.price) .. (row.old and " *" or ""), C.text, "RIGHT")
-		local lost = not row.loss and "?" or row.loss == 0 and "nothing" or money(row.loss)
+		local lost = not row.loss and "?" or row.loss == 0 and "free" or money(row.loss)
 		text(424, y, 84, lost, not row.loss and C.dim or row.loss == 0 and C.ok or C.text, "RIGHT")
 		y = y + 30
 	end
@@ -419,7 +426,7 @@ function draw.Shop()
 	end)
 	if shopNote then text(232, y + 5, INNER - 232, shopNote, C.text) end
 	y = y + 34
-	local notes = { "Lost if resold: the price minus what a vendor pays for the item. ? means the game has not loaded it yet." }
+	local notes = { "Net cost: the price minus what a vendor pays you when you sell the item on. ? means not loaded yet." }
 	if anyUpTo then notes[#notes + 1] = "up to: the gain of the best random suffix. The price is the cheapest suffix on sale, so check before buying." end
 	if anyOld then notes[#notes + 1] = "* the price is older than three days." end
 	for _, line in ipairs(notes) do

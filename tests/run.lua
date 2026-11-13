@@ -140,6 +140,21 @@ for class, list in pairs(ns.Calibration) do
 	end
 end
 
+case("levels: another level is recorded and pointed out")
+S.units.party1.level = 58
+Stub.Fire("PLAYER_REGEN_ENABLED")
+Stub.RunTimers()
+eq(ns.lastFight.me.level, 60, "own level"); eq(ns.Compare(ns.lastFight, profile)[1].level, 58, "level of the other player")
+SlashCmdList.GEARORSKILL("")
+ns.ShowTab("Group")
+shows("Lvl in yellow: another level than yours.")
+S.units.party1.level = nil
+ns.lastFight = fight
+ns.ShowTab("Group")
+assert(not texts():find("Lvl in yellow", 1, true), "no level note when everyone has your level")
+ns.ShowTab("Me")
+SlashCmdList.GEARORSKILL("")
+
 case("meter values locked right after combat are read on a retry")
 ns.lastFight, S.lockedReads = nil, 1
 Stub.Fire("PLAYER_REGEN_ENABLED")

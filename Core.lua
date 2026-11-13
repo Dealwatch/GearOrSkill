@@ -220,7 +220,7 @@ end
 -- Upgrades Auctionator has seen at the auction house.
 -- byValue: order by gain per copper lost instead of by gain.
 -- Each row: slot, id, name, search (text to look for), gain, price, old (price older than a few
--- days), loss (price minus what a vendor pays back, nil if unknown) and, for items with a
+-- days), loss (the net cost: price minus what a vendor pays back, nil if unknown) and, for items with a
 -- random suffix, upTo = true: the gain is that of the best suffix and the price that of the
 -- cheapest one on sale, since Auctionator's stored price does not say which suffix it was.
 function ns.ShopList(links, class, level, profile, byValue)
@@ -330,7 +330,7 @@ function ns.Overlap(a, b)
 end
 
 -- Players of your class who play like you, compared with you.
--- Returns rows { name, guid, damage, gear, rest }, the number of players left out, and
+-- Returns rows { name, guid, level, damage, gear, rest }, the number of players left out, and
 -- whether the gear estimate is calibrated with the simulator.
 function ns.Compare(fight, profile)
 	local me = fight.me
@@ -343,7 +343,7 @@ function ns.Compare(fight, profile)
 	for _, other in ipairs(fight.others) do
 		if other.class == me.class then
 			if ns.Overlap(me, other) >= SAME_SPEC_OVERLAP then
-				local row = { name = other.name, guid = other.guid, damage = other.total / me.total - 1 }
+				local row = { name = other.name, guid = other.guid, level = other.level, damage = other.total / me.total - 1 }
 				local cached = ns.gearCache[other.guid]
 				if cached and myScore > 0 then
 					-- ponytail: assumes damage grows in step with character value and that both
@@ -360,6 +360,21 @@ function ns.Compare(fight, profile)
 	end
 	table.sort(rows, function(a, b) return a.damage > b.damage end)
 	return rows, leftOut, calibrated
+end
+
+-- Level of every group member by guid: a higher level explains damage that is neither gear nor play.
+local function groupLevels()
+	local levels = {}
+	local prefix, count = "party", GetNumGroupMembers() - 1
+	if IsInRaid() then prefix, count = "raid", GetNumGroupMembers() end
+	for i = 0, count do
+		local unit = i == 0 and "player" or prefix .. i
+		local guid, level = UnitGUID(unit), UnitLevel(unit)
+		if guid and not isSecret(guid) and not isSecret(level) and type(level) == "number" and level > 0 then
+			levels[guid] = level
+		end
+	end
+	return levels
 end
 
 local function readSource(src, sessionType, meterType)
@@ -385,11 +400,13 @@ function ns.ReadFight()
 	local sources = type(session) == "table" and session.combatSources
 	if type(sources) ~= "table" or #sources == 0 then return nil, false end
 	local fight = { others = {}, time = GetTime() }
+	local levels = groupLevels()
 	if not isSecret(session.durationSeconds) then fight.duration = session.durationSeconds end
 	for _, src in ipairs(sources) do
 		local entry, locked = readSource(src, sessionType, meterType)
 		if locked then return nil, true end
 		if entry and entry.total > 0 then
+			entry.level = levels[entry.guid]
 			if src.isLocalPlayer then fight.me = entry else fight.others[#fight.others + 1] = entry end
 		end
 	end
