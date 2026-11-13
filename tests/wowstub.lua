@@ -163,6 +163,11 @@ local S = Stub.state
 
 date = os.date
 tinsert = table.insert
+function strsplit(sep, text)
+	local fields = {}
+	for field in (text .. sep):gmatch("(.-)%" .. sep) do fields[#fields + 1] = field end
+	return unpack(fields)
+end
 unpack = unpack or table.unpack
 function print(msg) Stub.printed[#Stub.printed + 1] = msg end
 function issecretvalue(v) return rawequal(v, Stub.SECRET) end
@@ -190,6 +195,7 @@ C_CVar = { GetCVarBool = function() return true end }
 C_Item = {
 	GetItemStats = function(link) if not link:find("Shirt") then return { ITEM_MOD_STRENGTH_SHORT = 5 } end end,
 	DoesItemExistByID = function(id) return not S.missingItems[id] end,
+	GetItemInfo = function(id) return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, S.sellPrice and S.sellPrice(id) end,
 }
 function IsSpellKnown(id) return S.knownSpells[id] == true end
 C_SpecializationInfo = { GetInspectSpecialization = function() return 0 end }

@@ -151,7 +151,7 @@ def build(sim, today):
     profiles = read_profiles(sim, stats)
     armor, weapons, ranged = read_capabilities(sim, proto)
 
-    items, slots = {}, {}
+    items, slots, suffixed = {}, {}, {}
     for item in main["items"] + leftover["items"]:
         if not item.get("type") or not item.get("scalingOptions"):
             continue
@@ -165,6 +165,7 @@ def build(sim, today):
             item.get("rangedWeaponType", 0), item.get("reqLvl") or max(1, ilvl - ITEM_LEVEL_LEAD), ilvl, "%g" % dps, scaling.get("randPropPoints", 0),
             ",".join(classes[c] for c in item.get("classAllowlist") or [] if c in classes) or "-",
             sparse(item_stats), item["name"], source_text(source or (item.get("sources") or [None])[0], db, professions),
+            ",".join(str(s) for s in item.get("randomSuffixOptions") or []) or "-",
         ]
         items[item["id"]] = "^".join(str(f).replace("^", " ") for f in fields)
         is_candidate = (
@@ -173,6 +174,11 @@ def build(sim, today):
         )
         if is_candidate:
             slots.setdefault(item["type"], []).append(item["id"])
+        # Random-suffix items ("of the Monkey") are world drops traded at the auction house;
+        # they have no fixed source, so they are listed apart, for the Shop tab only.
+        if (item.get("randomSuffixOptions") and item.get("quality", 0) >= 2 and ilvl <= MAX_ITEM_LEVEL
+                and item.get("phase", 1) <= phase and item["type"] != TRINKET):
+            suffixed.setdefault(item["type"], []).append(item["id"])
 
     # Guard against a silent format change upstream: better no update than an empty one.
     assert len(items) > 5000, "only %d items parsed" % len(items)
@@ -206,6 +212,14 @@ def build(sim, today):
     out.append("\tsuffixes = {")
     for suffix in sorted(main["randomSuffixes"], key=lambda s: s["id"]):
         out.append('\t\t[%d] = "%s",' % (suffix["id"], sparse(dict(enumerate(suffix["stats"])))))
+    out.append("\t},")
+    out.append("\tsuffixNames = {")
+    for suffix in sorted(main["randomSuffixes"], key=lambda s: s["id"]):
+        out.append("\t\t[%d] = %s," % (suffix["id"], lua_string(suffix["name"])))
+    out.append("\t},")
+    out.append("\tsuffixed = {")
+    for slot in sorted(suffixed):
+        out.append("\t\t[%d] = { %s }," % (slot, ", ".join(str(i) for i in sorted(suffixed[slot]))))
     out.append("\t},")
     out.append("\tenchants = {")
     seen = set()

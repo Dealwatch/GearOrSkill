@@ -4,7 +4,7 @@ return function(Stub, ns)
 	local S = Stub.state
 	local ids = {}
 	for id, raw in pairs(ns.Data.items) do
-		local name = raw:match("%^([^%^]+)%^[^%^]+$")
+		local name = raw:match("%^([^%^]+)%^[^%^]+%^[^%^]+$") -- third field from the end
 		ids[name] = ids[name] or id
 	end
 	local function link(name, enchant, suffix)
@@ -52,4 +52,25 @@ return function(Stub, ns)
 		[STABBY] = { { 9, 60000 }, { 1, 30000 } },
 	}
 	S.duration, S.lockedReads, S.inCombat, S.inGroup = 102, 0, false, true
+
+	-- Auctionator with made-up but repeatable prices: it has seen every fifth item.
+	local function seen(id) return id % 5 == 0 end
+	Stub.auctionPrice = function(id) return seen(id) and 2000 + (id * 37) % 60000 or nil end
+	Stub.searches, Stub.lists = {}, {}
+	S.sellPrice = function(id) return 1500 + (id * 11) % 9000 end
+	Stub.Auctionator = { Constants = { IsLegacyAH = false }, API = { v1 = {
+		GetAuctionPriceByItemID = function(caller, id) assert(caller == "GearOrSkill") return Stub.auctionPrice(id) end,
+		GetAuctionAgeByItemID = function(_, id) return seen(id) and id % 6 or nil end,
+		GetAuctionPriceByItemLink = function() return nil end,
+		GetAuctionAgeByItemLink = function() return nil end,
+		GetVendorPriceByItemID = function() return nil end,
+		IsAuctionDataExactByItemLink = function() return false end,
+		RegisterForDBUpdate = function() end,
+		CreateShoppingList = function(_, name, terms) Stub.lists[name] = terms end,
+		MultiSearch = function(_, terms)
+			assert(AuctionHouseFrame and AuctionHouseFrame:IsShown(), "Auction house is not open")
+			Stub.searches[#Stub.searches + 1] = terms
+		end,
+		MultiSearchExact = function() end,
+	} } }
 end

@@ -188,6 +188,84 @@ SlashCmdList.GEARORSKILL("")
 S.units.player.class, S.units.player.className = "SHAMAN", "Shaman"
 ns.lastFight = fight
 
+case("shop: needs Auctionator; lists what it has a price for, at most two per slot")
+SlashCmdList.GEARORSKILL("")
+ns.ShowTab("Shop")
+shows("Auctionator is not installed or not turned on.")
+Auctionator = Stub.Auctionator
+local shop = ns.ShopList(S.gear.player, "SHAMAN", 60, profile, false)
+assert(#shop > 0, "no shop rows")
+local perSlot, fixed, suffixed = {}, nil, nil
+local _, wornSlots = ns.GearScore(S.gear.player, profile)
+for i, row in ipairs(shop) do
+	eq(row.price, Stub.auctionPrice(row.id), "price comes from Auctionator")
+	eq(row.loss, math.max(row.price - S.sellPrice(row.id), 0), "loss is price minus vendor value")
+	eq(row.old, row.id % 6 > 3, "old price flag")
+	assert(row.gain >= 1 and (i == 1 or row.gain <= shop[i - 1].gain), "gains at least 1 and sorted")
+	local slotName = ns.SLOT_NAME[row.slot]
+	perSlot[slotName] = (perSlot[slotName] or 0) + 1
+	assert(perSlot[slotName] <= 2, "more than two rows for " .. slotName)
+	if not row.upTo then fixed = fixed or row end
+end
+-- Random-suffix items matter while leveling: at 20 they make the list, at 60 fixed items beat them.
+for _, row in ipairs(ns.ShopList(S.gear.player, "SHAMAN", 20, profile, false)) do
+	if row.upTo then suffixed = suffixed or row end
+end
+assert(fixed and suffixed, "the sample should yield both fixed and random-suffix items")
+local item, best = ns.Item(suffixed.id), 0
+for suffix in item.suffixes:gmatch("%d+") do
+	best = math.max(best, ns.ItemScore(item, profile, suffixed.slot, nil, tonumber(suffix)))
+end
+near(suffixed.gain, best - (wornSlots[suffixed.slot] and wornSlots[suffixed.slot].score or 0), "a suffix item shows the gain of its best suffix")
+eq(ns.Item(fixed.id).suffixes, "-", "fixed items have no suffix options")
+
+case("shop: sorting by value for money, and nothing without prices")
+local byValue = ns.ShopList(S.gear.player, "SHAMAN", 60, profile, true)
+for i = 2, #byValue do
+	local a, b = byValue[i - 1], byValue[i]
+	assert(a.gain / math.max(a.loss, 1) >= b.gain / math.max(b.loss, 1), "value order broken at row " .. i)
+end
+local realPrice = Stub.auctionPrice
+Stub.auctionPrice = function() return nil end
+eq(#ns.ShopList(S.gear.player, "SHAMAN", 60, profile, false), 0, "no prices, no rows")
+ns.ShowTab("Shop"); shows("Auctionator knows no price for anything better than your gear.")
+Stub.auctionPrice = realPrice
+
+case("shop: hand-off to Auctionator, with the auction house closed, open, and an old build")
+local message = ns.ShopSearch(shop)
+assert(message:find("Saved as shopping list", 1, true), message)
+eq(#Stub.lists.GearOrSkill, #shop, "one search term per row"); eq(Stub.lists.GearOrSkill[1], shop[1].name, "terms are item names")
+eq(#Stub.searches, 0, "no live search while the auction house is closed")
+AuctionHouseFrame = { IsShown = function() return true end }
+message = ns.ShopSearch(shop)
+assert(message:find("Searching for " .. #shop .. " items", 1, true), message)
+eq(#Stub.searches, 1, "live search with the auction house open")
+local api = Stub.Auctionator.API.v1
+local create, multi = api.CreateShoppingList, api.MultiSearch
+api.CreateShoppingList, api.MultiSearch = nil, nil
+assert(ns.ShopSearch(shop):find("offers no shopping lists", 1, true), "old build message")
+api.CreateShoppingList, api.MultiSearch = create, multi
+eq(ns.ShopSearch({}), "Nothing to search for.", "empty list")
+
+case("shop tab: table, sort toggle and search button")
+ns.ShowTab("Shop")
+shows("Auction house upgrades"); shows("Sorted by gain."); shows(shop[1].name); shows("Search these in Auctionator")
+S.level = 20
+ns.ShowTab("Shop"); shows("up to +"); shows("random suffix, check the stats")
+S.level = 60
+ns.ShowTab("Shop")
+for _, button in ipairs(Stub.Buttons(GearOrSkillFrame)) do
+	if button.h == 18 then button.scripts.OnClick() end
+end
+shows("Sorted by value for money.")
+for _, button in ipairs(Stub.Buttons(GearOrSkillFrame)) do
+	if button.w == 220 then button.scripts.OnClick() end
+end
+shows("Searching for ")
+ns.ShowTab("Me")
+SlashCmdList.GEARORSKILL("")
+Auctionator, AuctionHouseFrame = nil, nil
+
 case("probe: gear of player and target")
 S.units.target = S.units.party1
 S.gear.target = S.gear.party1

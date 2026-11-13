@@ -12,6 +12,8 @@ Open the window with `/gos` or from the addon menu at the minimap.
 - **Group**: after each fight, every group member of your class who uses the same spells as you, with their gear difference, their damage difference, and the part gear does not explain.
 - **Fight**: you against one of those players, spell by spell, as a share of total damage. The biggest gap is highlighted.
 
+- **Shop**: upgrades the [Auctionator](https://www.curseforge.com/wow/addons/auctionator) addon has seen at the auction house, with their price and what you lose if you later sell the item to a vendor. One click hands the list to Auctionator, which searches it live. Auctionator is optional; without it only this tab stays empty.
+
 The Group and Fight tabs need the game's built-in damage meter to be turned on.
 
 ## Install with WowUp
@@ -34,6 +36,7 @@ The same job runs the simulator to calibrate the gear estimate (`Calibration.lua
 - The gear difference is an estimate, not a simulation of both players. It is calibrated with the simulator at level 60 where wowsims ships a reference character (currently Shaman and damage Priest); elsewhere it is a rougher estimate from the character sheet. It ignores talents, buffs, set bonuses and item effects, and the calibration assumes a raid-buffed character.
 - Upgrade suggestions leave out trinkets and off-hand items. They hide items the game client does not have, items of a later simulator phase, drops from raids that are not open yet (opening dates are in `tools/build_data.py`) and other items above item level 66. Some rewards that cannot be obtained yet may still appear.
 - Mail and plate are suggested from level 40, or earlier if the client reports the armor skill as known.
+- The Shop tab shows Auctionator's stored prices, which are as old as its last scan. For items with a random suffix ("of the Monkey") it shows the gain of the best suffix and the price of the cheapest one on sale, because the stored price does not say which suffix it belongs to; the live search in Auctionator shows what is really there. Soulbound items never appear, since they are never on sale.
 - Players are matched by the spells they use, because the game does not tell addons another player's spec.
 - Spell data is read after combat ends; the game locks it during a fight.
 

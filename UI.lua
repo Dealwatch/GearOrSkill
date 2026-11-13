@@ -1,10 +1,10 @@
--- The window: tabs "Me", "Group" and "Fight". Everything is redrawn from scratch on change.
+-- The window: tabs "Me", "Group", "Fight" and "Shop". Everything is redrawn from scratch on change.
 local _, ns = ...
 local Data = ns.Data
 
 local W, H, PAD, TOP = 560, 566, 14, 62
 local INNER = W - 2 * PAD - 24 -- drawable width inside the content panel
-local MAX_WEIGHTS, MAX_UPGRADES, MAX_SPELLS, MAX_PLAYERS = 8, 5, 10, 8
+local MAX_WEIGHTS, MAX_UPGRADES, MAX_SPELLS, MAX_PLAYERS, MAX_SHOP = 8, 5, 10, 8, 8
 local NOTABLE = 0.05 -- differences below 5% are treated as noise
 
 local C = {
@@ -15,6 +15,7 @@ local C = {
 }
 
 local tab, selected = "Me", nil -- selected: guid of the player shown in the Fight tab
+local shopByValue, shopNote = false, nil -- Shop tab: sort order, and the answer to the last search
 local draw = {}
 
 local main = CreateFrame("Frame", "GearOrSkillFrame", UIParent)
@@ -355,8 +356,81 @@ function draw.Fight()
 	end
 end
 
+local function money(copper)
+	local gold, silver = math.floor(copper / 10000), math.floor(copper / 100) % 100
+	if gold > 0 then return gold .. "g " .. silver .. "s" end
+	if silver > 0 then return silver .. "s " .. copper % 100 .. "c" end
+	return copper .. "c"
+end
+
+function draw.Shop()
+	local profile = ns.Profile()
+	local _, class = UnitClass("player")
+	text(0, 0, 300, "Auction house upgrades", C.text, "LEFT", GameFontNormalLarge)
+	text(INNER - 200, 3, 200, "prices stored by Auctionator", C.dim, "RIGHT")
+	if not profile then
+		text(0, 30, INNER, "wowsims has no stat weights for this class yet, so items cannot be rated.", C.dim)
+		return
+	elseif not ns.Auctionator() then
+		text(0, 30, INNER, "Auctionator is not installed or not turned on.")
+		text(0, 48, INNER, "This tab reads the prices Auctionator has stored. The other tabs work without it.", C.dim)
+		return
+	end
+	local rows = ns.ShopList(ns.ReadGear("player") or {}, class, UnitLevel("player"), profile, shopByValue)
+	if #rows == 0 then
+		text(0, 30, INNER, "Auctionator knows no price for anything better than your gear.")
+		text(0, 48, INNER, "Open the auction house, let Auctionator scan, then look again.", C.dim)
+		return
+	end
+	text(0, 24, INNER, shopByValue and "Sorted by value for money. Click to sort by gain." or "Sorted by gain. Click to sort by value for money.", C.dim, "LEFT", GameFontDisableSmall)
+	click(0, 20, INNER, 18, function()
+		shopByValue = not shopByValue
+		Refresh()
+	end)
+	local y = 48
+	text(0, y, 70, "Slot", C.dim)
+	text(74, y, 196, "Item", C.dim)
+	text(274, y, 70, "Gain", C.dim, "RIGHT")
+	text(350, y, 72, "Price", C.dim, "RIGHT")
+	text(424, y, 84, "Lost if resold", C.dim, "RIGHT")
+	rect(0, y + 16, INNER, 1, C.line)
+	y = y + 20
+	local shown, anyOld, anyUpTo = {}, false, false
+	for i = 1, math.min(MAX_SHOP, #rows) do
+		local row = rows[i]
+		shown[i] = row
+		anyOld, anyUpTo = anyOld or row.old, anyUpTo or row.upTo
+		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 30, C.stripe) end
+		text(0, y, 70, ns.SLOT_NAME[row.slot])
+		text(74, y, 196, row.name)
+		if row.upTo then text(74, y + 14, 196, "random suffix, check the stats", C.dim, "LEFT", GameFontDisableSmall) end
+		text(274, y, 70, (row.upTo and "up to +" or "+") .. number(row.gain), C.ok, "RIGHT")
+		text(350, y, 72, money(row.price) .. (row.old and " *" or ""), C.text, "RIGHT")
+		local lost = not row.loss and "?" or row.loss == 0 and "nothing" or money(row.loss)
+		text(424, y, 84, lost, not row.loss and C.dim or row.loss == 0 and C.ok or C.text, "RIGHT")
+		y = y + 30
+	end
+	y = y + 6
+	rect(0, y, 220, 24, C.line)
+	text(0, y + 5, 220, "Search these in Auctionator", C.gold, "CENTER")
+	click(0, y, 220, 24, function()
+		shopNote = ns.ShopSearch(shown)
+		Refresh()
+	end)
+	if shopNote then text(232, y + 5, INNER - 232, shopNote, C.text) end
+	y = y + 34
+	local notes = { "Lost if resold: the price minus what a vendor pays for the item. ? means the game has not loaded it yet." }
+	if anyUpTo then notes[#notes + 1] = "up to: the gain of the best random suffix. The price is the cheapest suffix on sale, so check before buying." end
+	if anyOld then notes[#notes + 1] = "* the price is older than three days." end
+	for _, line in ipairs(notes) do
+		text(0, y, INNER, line, C.dim, "LEFT", GameFontDisableSmall)
+		y = y + 14
+	end
+end
+
 local tabs = {}
 function ns.ShowTab(name)
+	if name then shopNote = nil end
 	tab = name or tab
 	for key, button in pairs(tabs) do
 		local on = key == tab
@@ -366,7 +440,7 @@ function ns.ShowTab(name)
 	Refresh()
 end
 
-for i, name in ipairs({ "Me", "Group", "Fight" }) do
+for i, name in ipairs({ "Me", "Group", "Fight", "Shop" }) do
 	local button = CreateFrame("Button", nil, main)
 	button:SetSize(86, 24)
 	button:SetPoint("TOPLEFT", main, "TOPLEFT", PAD + (i - 1) * 88, -(TOP - 24))

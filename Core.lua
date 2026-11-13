@@ -1,5 +1,5 @@
 -- Scoring, group inspection and fight reading. No UI in here.
-local _, ns = ...
+local ADDON, ns = ...
 local Data = ns.Data
 
 local SAME_SPEC_OVERLAP = 0.5 -- share of damage that must come from the same spells
@@ -49,17 +49,26 @@ function ns.Item(id)
 	return {
 		id = id, type = tonumber(f[1]), armor = tonumber(f[2]), weapon = tonumber(f[3]), hand = tonumber(f[4]),
 		ranged = tonumber(f[5]), reqLvl = tonumber(f[6]), ilvl = tonumber(f[7]), dps = tonumber(f[8]), rpp = tonumber(f[9]),
-		classes = f[10], stats = parseSparse(f[11]), name = f[12], source = f[13],
+		classes = f[10], stats = parseSparse(f[11]), name = f[12], source = f[13], suffixes = f[14],
 	}
 end
 
 -- Item id, enchant id and random-suffix id from an item link.
+-- The suffix sits in the classic suffix field or, as this client stores suffixes as item
+-- bonuses, among the bonus ids further back; any later field that names a known suffix counts.
 function ns.ParseLink(link)
-	local id, enchant, suffix = link:match("item:(%d+):(%d*):%-?%d*:%-?%d*:%-?%d*:%-?%d*:(%-?%d*)")
-	if not id then
-		id = link:match("item:(%d+)")
+	local itemString = link:match("item:[%-%d:]+")
+	if not itemString then return nil end
+	local fields = { strsplit(":", itemString) }
+	local suffix
+	for i = 8, #fields do
+		local value = tonumber(fields[i])
+		if value and Data.suffixes[math.abs(value)] then
+			suffix = math.abs(value)
+			break
+		end
 	end
-	return tonumber(id), tonumber(enchant), suffix and tonumber(suffix) and math.abs(tonumber(suffix))
+	return tonumber(fields[2]), tonumber(fields[3]), suffix
 end
 
 local function weighted(stats, profile, scale)
@@ -71,13 +80,17 @@ local function weighted(stats, profile, scale)
 	return total
 end
 
+local suffixStats = {} -- parsed suffix allocations, kept because the shop list scores thousands
+
 -- Value of one item in a slot for a weight profile, in the profile's own unit.
 function ns.ItemScore(item, profile, slot, enchant, suffix)
 	local total = weighted(item.stats, profile)
 	local dpsWeight = profile[DPS_WEIGHT[slot]]
 	if dpsWeight then total = total + dpsWeight * item.dps end
-	if suffix and Data.suffixes[suffix] and item.rpp > 0 then
-		total = total + weighted(parseSparse(Data.suffixes[suffix]), profile, item.rpp / 10000)
+	-- Only a suffix this item can roll counts: other link fields may hold the same number.
+	if suffix and item.rpp > 0 and (":" .. item.suffixes:gsub(",", ":") .. ":"):find(":" .. suffix .. ":", 1, true) then
+		suffixStats[suffix] = suffixStats[suffix] or parseSparse(Data.suffixes[suffix] or "")
+		total = total + weighted(suffixStats[suffix], profile, item.rpp / 10000)
 	end
 	if enchant and Data.enchants[enchant] then
 		total = total + weighted(parseSparse(Data.enchants[enchant]), profile)
@@ -134,39 +147,137 @@ local function usable(item, class, level, slot)
 	return true
 end
 
--- Best obtainable item per slot compared with what is equipped, biggest gain first.
-function ns.Upgrades(links, class, level, profile)
+-- Walks every item of the given lists (item type -> ids) that the character could wear in an
+-- upgrade slot and calls fn(slot, item, replaced): replaced is the score of what it would
+-- replace there. Returns the per-slot details of the equipped gear.
+local function forCandidates(links, class, level, profile, lists, fn)
 	local _, equipped = ns.GearScore(links, profile)
 	local worn = {}
 	for _, entry in pairs(equipped) do
 		if entry.id then worn[entry.id] = true end
 	end
 	local function scoreOf(slot) return equipped[slot] and equipped[slot].score or 0 end
-	local results = {}
 	for _, slot in ipairs(UPGRADE_SLOTS) do
 		local shown = slot
 		if slot == 11 and scoreOf(12) < scoreOf(11) then shown = 12 end -- replace the weaker ring
-		local best, bestGain = nil, 0
-		for _, id in ipairs(Data.slots[SLOT_TYPE[slot]] or {}) do
+		for _, id in ipairs(lists[SLOT_TYPE[slot]] or {}) do
 			if not worn[id] and C_Item.DoesItemExistByID(id) then -- skip what this client does not have
 				local item = ns.Item(id)
 				if item and usable(item, class, level, slot) then
 					local replaced = scoreOf(shown)
 					if item.hand == TWO_HAND then replaced = replaced + scoreOf(17) end
-					local gain = ns.ItemScore(item, profile, slot) - replaced
-					if gain > bestGain then best, bestGain = item, gain end
+					fn(shown, item, replaced)
 				end
 			end
 		end
-		if best then
-			results[#results + 1] = {
-				slot = shown, equipped = equipped[shown] and equipped[shown].name or "empty", item = best, gain = bestGain,
-				seen = GearOrSkillSeen ~= nil and GearOrSkillSeen[best.id] == true,
-			}
-		end
+	end
+	return equipped
+end
+
+-- Best obtainable item per slot compared with what is equipped, biggest gain first.
+function ns.Upgrades(links, class, level, profile)
+	local best = {}
+	local equipped = forCandidates(links, class, level, profile, Data.slots, function(slot, item, replaced)
+		local gain = ns.ItemScore(item, profile, slot) - replaced
+		if gain > (best[slot] and best[slot].gain or 0) then best[slot] = { item = item, gain = gain } end
+	end)
+	local results = {}
+	for slot, entry in pairs(best) do
+		results[#results + 1] = {
+			slot = slot, equipped = equipped[slot] and equipped[slot].name or "empty", item = entry.item, gain = entry.gain,
+			seen = GearOrSkillSeen ~= nil and GearOrSkillSeen[entry.item.id] == true,
+		}
 	end
 	table.sort(results, function(a, b) return a.gain > b.gain end)
 	return results
+end
+
+-- Auction house upgrades, priced by the Auctionator addon. --------------------------------
+
+local SHOP_PER_SLOT = 2
+local OLD_PRICE_DAYS = 3 -- same threshold as Auctionator users know from MoneyTalks
+
+-- Auctionator's functions for other addons, or nil when it is not loaded.
+function ns.Auctionator()
+	return Auctionator and Auctionator.API and Auctionator.API.v1
+end
+
+-- Calls one of them if this Auctionator build has it. Returns success and the result.
+local function ask(name, ...)
+	local api = ns.Auctionator()
+	if not api or type(api[name]) ~= "function" then return false end
+	return pcall(api[name], ADDON, ...)
+end
+
+local function price(id)
+	local ok, copper = ask("GetAuctionPriceByItemID", id)
+	if not ok or type(copper) ~= "number" or copper <= 0 then return nil end
+	local _, age = ask("GetAuctionAgeByItemID", id)
+	local sells = select(11, C_Item.GetItemInfo(id))
+	return copper, type(age) == "number" and age or nil, type(sells) == "number" and sells > 0 and sells or nil
+end
+
+-- Upgrades Auctionator has seen at the auction house.
+-- byValue: order by gain per copper lost instead of by gain.
+-- Each row: slot, id, name, search (text to look for), gain, price, old (price older than a few
+-- days), loss (price minus what a vendor pays back, nil if unknown) and, for items with a
+-- random suffix, upTo = true: the gain is that of the best suffix and the price that of the
+-- cheapest one on sale, since Auctionator's stored price does not say which suffix it was.
+function ns.ShopList(links, class, level, profile, byValue)
+	local rows = {}
+	local function add(slot, item, gain, upTo)
+		if gain < 1 then return end -- would show as +0
+		local copper, age, sells = price(item.id)
+		if not copper then return end
+		rows[#rows + 1] = {
+			slot = slot, id = item.id, name = item.name, search = item.name, gain = gain, upTo = upTo, price = copper,
+			old = age ~= nil and age > OLD_PRICE_DAYS, loss = sells and math.max(copper - sells, 0) or nil,
+		}
+	end
+	forCandidates(links, class, level, profile, Data.slots, function(slot, item, replaced)
+		add(slot, item, ns.ItemScore(item, profile, slot) - replaced, false)
+	end)
+	forCandidates(links, class, level, profile, Data.suffixed, function(slot, item, replaced)
+		local best = 0
+		for suffix in item.suffixes:gmatch("%d+") do
+			best = math.max(best, ns.ItemScore(item, profile, slot, nil, tonumber(suffix)) - replaced)
+		end
+		add(slot, item, best, true)
+	end)
+	local function worth(row) return row.gain / math.max(row.loss or row.price, 1) end
+	table.sort(rows, function(a, b)
+		if byValue and worth(a) ~= worth(b) then return worth(a) > worth(b) end
+		if a.gain ~= b.gain then return a.gain > b.gain end
+		return a.name < b.name
+	end)
+	local kept, perSlot = {}, {}
+	for _, row in ipairs(rows) do
+		local slotName = ns.SLOT_NAME[row.slot]
+		perSlot[slotName] = (perSlot[slotName] or 0) + 1
+		if perSlot[slotName] <= SHOP_PER_SLOT then kept[#kept + 1] = row end
+	end
+	return kept
+end
+
+-- Hands the rows to Auctionator: saved as its shopping list "GearOrSkill" and, with the
+-- auction house open, searched right away. Returns a sentence for the user.
+function ns.ShopSearch(rows)
+	local terms, seen = {}, {}
+	for _, row in ipairs(rows) do
+		if not seen[row.search] then
+			seen[row.search] = true
+			terms[#terms + 1] = row.search
+		end
+	end
+	if #terms == 0 then return "Nothing to search for." end
+	local saved = ask("CreateShoppingList", "GearOrSkill", terms)
+	local atAuctionHouse = AuctionHouseFrame ~= nil and AuctionHouseFrame:IsShown()
+	if atAuctionHouse and ask("MultiSearch", terms) then
+		return "Searching for " .. #terms .. " items in Auctionator."
+	elseif saved then
+		return "Saved as shopping list \"GearOrSkill\" in Auctionator. Open the auction house to search it."
+	end
+	return "This Auctionator version offers no shopping lists to other addons."
 end
 
 -- Value of everything a character has besides gear, in the profile's unit.
