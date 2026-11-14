@@ -342,11 +342,11 @@ for i, row in ipairs(shop) do
 	local slotName = ns.SLOT_NAME[row.slot]
 	perSlot[slotName] = (perSlot[slotName] or 0) + 1
 	assert(perSlot[slotName] <= 2, "more than two rows for " .. slotName)
-	if not row.upTo then fixed = fixed or row end
+	if not row.anySuffix then fixed = fixed or row end
 end
 -- Random-suffix items matter while leveling: at 20 they make the list, at 60 fixed items beat them.
 for _, row in ipairs(ns.ShopList(S.gear.player, "SHAMAN", 20, profile, false)) do
-	if row.upTo then suffixed = suffixed or row end
+	if row.anySuffix then suffixed = suffixed or row end
 end
 assert(fixed and suffixed, "the sample should yield both fixed and random-suffix items")
 local item, best, bestName = ns.Item(suffixed.id), 0, nil
@@ -354,7 +354,7 @@ for suffix in item.suffixes:gmatch("%d+") do
 	local score = ns.ItemScore(item, profile, suffixed.slot, nil, tonumber(suffix))
 	if score > best then best, bestName = score, ns.Data.suffixNames[tonumber(suffix)] end
 end
-eq(suffixed.suffix, bestName, "a suffix item names its best suffix")
+eq(suffixed.name, item.name .. " " .. bestName, "a suffix item is listed as its best variant")
 near(suffixed.gain, best - (wornSlots[suffixed.slot] and wornSlots[suffixed.slot].score or 0), "a suffix item shows the gain of its best suffix")
 eq(ns.Item(fixed.id).suffixes, "-", "fixed items have no suffix options")
 
@@ -381,24 +381,34 @@ Stub.auctionPrice = realPrice
 case("shop: hand-off to Auctionator, with the auction house closed, open, and an old build")
 local message = ns.ShopSearch(shop)
 assert(message:find("Saved as shopping list", 1, true), message)
-eq(#Stub.lists.GearOrSkill, #shop, "one search term per row"); eq(Stub.lists.GearOrSkill[1], shop[1].name, "terms are item names")
+eq(#Stub.lists.GearOrSkill, #shop, "one search term per row")
+eq(Stub.lists.GearOrSkill[1], '"' .. shop[1].name .. '"', "list entries are exact searches for the item names")
 eq(#Stub.searches, 0, "no live search while the auction house is closed")
 AuctionHouseFrame = { IsShown = function() return true end }
 message = ns.ShopSearch(shop)
 assert(message:find("Searching for " .. #shop .. " items", 1, true), message)
 eq(#Stub.searches, 1, "live search with the auction house open")
+eq(Stub.searches[1][1], shop[1].name, "the live search is exact too, by plain name")
+local variants = ns.ShopList(S.gear.player, "SHAMAN", 20, profile, false)
+ns.ShopSearch(variants)
+for i, row in ipairs(variants) do
+	if row.anySuffix then
+		assert(row.name:find(" of ", 1, true), "a suffix row carries the suffix in its name: " .. row.name)
+		eq(Stub.searches[2][i], row.name, "and is searched as exactly that variant")
+	end
+end
 local api = Stub.Auctionator.API.v1
-local create, multi = api.CreateShoppingList, api.MultiSearch
-api.CreateShoppingList, api.MultiSearch = nil, nil
+local create, multi = api.CreateShoppingList, api.MultiSearchExact
+api.CreateShoppingList, api.MultiSearchExact = nil, nil
 assert(ns.ShopSearch(shop):find("offers no shopping lists", 1, true), "old build message")
-api.CreateShoppingList, api.MultiSearch = create, multi
+api.CreateShoppingList, api.MultiSearchExact = create, multi
 eq(ns.ShopSearch({}), "Nothing to search for.", "empty list")
 
 case("shop tab: table, sort toggle and search button")
 ns.ShowTab("Shop")
 shows("Auction house upgrades"); shows("Sorted by gain."); shows(shop[1].name); shows("Search these in Auctionator")
 S.level = 20
-ns.ShowTab("Shop"); shows("up to +"); shows('best as "of ')
+ns.ShowTab("Shop"); shows("from "); shows(" of the "); shows("Auctionator stores one price for all suffixes")
 S.level = 60
 ns.ShowTab("Shop")
 for _, button in ipairs(Stub.Buttons(GearOrSkillFrame)) do

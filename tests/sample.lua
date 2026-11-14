@@ -67,10 +67,11 @@ return function(Stub, ns)
 		IsAuctionDataExactByItemLink = function() return false end,
 		RegisterForDBUpdate = function() end,
 		CreateShoppingList = function(_, name, terms) Stub.lists[name] = terms end,
-		MultiSearch = function(_, terms)
+		MultiSearchExact = function(_, terms)
 			assert(AuctionHouseFrame and AuctionHouseFrame:IsShown(), "Auction house is not open")
+			for _, term in ipairs(terms) do assert(not term:find('"', 1, true), "Auctionator rejects quoted terms here") end
 			Stub.searches[#Stub.searches + 1] = terms
 		end,
-		MultiSearchExact = function() end,
+		MultiSearch = function() end,
 	} } }
 end

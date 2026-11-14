@@ -310,11 +310,11 @@ end
 
 -- Upgrades Auctionator has seen at the auction house.
 -- byValue: order by gain per copper lost instead of by gain.
--- Each row: slot, id, name, search (text to look for), gain, unrated (has an effect that is not counted), price, old (price older than a few
--- days), loss (the net cost: price minus what a vendor pays back, nil if unknown) and, for items with a
--- random suffix, upTo = true and suffix = the name of the best one ("of the Eagle"): the gain is
--- that suffix's and the price that of the cheapest one on sale, since Auctionator's stored
--- price does not say which suffix it was.
+-- Each row: slot, id, name, gain, unrated (has an effect that is not counted), price, old (price
+-- older than a few days) and loss (the net cost: price minus what a vendor pays back, nil if
+-- unknown). An item with a random suffix is listed as its best variant ("Claymore of Agility")
+-- with that variant's gain and anySuffix = true: Auctionator stores one price per item for
+-- all suffixes, so the price is the cheapest variant's and the named one may cost more.
 function ns.ShopList(links, class, level, profile, byValue)
 	local rows = {}
 	local function add(slot, item, gain, suffix)
@@ -322,8 +322,8 @@ function ns.ShopList(links, class, level, profile, byValue)
 		local copper, age, sells = price(item.id)
 		if not copper then return end
 		rows[#rows + 1] = {
-			slot = slot, id = item.id, name = item.name, search = item.name, gain = gain, price = copper,
-			upTo = suffix ~= nil, suffix = suffix and Data.suffixNames[suffix], unrated = ns.Unrated(item, profile),
+			slot = slot, id = item.id, name = suffix and (item.name .. " " .. Data.suffixNames[suffix]) or item.name,
+			gain = gain, price = copper, anySuffix = suffix ~= nil, unrated = ns.Unrated(item, profile),
 			old = age ~= nil and age > OLD_PRICE_DAYS, loss = sells and math.max(copper - sells, 0) or nil,
 		}
 	end
@@ -357,18 +357,21 @@ end
 
 -- Hands the rows to Auctionator: saved as its shopping list "GearOrSkill" and, with the
 -- auction house open, searched right away. Returns a sentence for the user.
+-- The searches are exact, so an item with a random suffix shows only the variant named in
+-- the row, at its real price, and not every other suffix.
 function ns.ShopSearch(rows)
-	local terms, seen = {}, {}
+	local terms, quoted, seen = {}, {}, {}
 	for _, row in ipairs(rows) do
-		if not seen[row.search] then
-			seen[row.search] = true
-			terms[#terms + 1] = row.search
+		if not seen[row.name] then
+			seen[row.name] = true
+			terms[#terms + 1] = row.name
+			quoted[#quoted + 1] = '"' .. row.name .. '"' -- Auctionator's way to write an exact search in a list
 		end
 	end
 	if #terms == 0 then return "Nothing to search for." end
-	local saved = ask("CreateShoppingList", "GearOrSkill", terms)
+	local saved = ask("CreateShoppingList", "GearOrSkill", quoted)
 	local atAuctionHouse = AuctionHouseFrame ~= nil and AuctionHouseFrame:IsShown()
-	if atAuctionHouse and ask("MultiSearch", terms) then
+	if atAuctionHouse and ask("MultiSearchExact", terms) then
 		return "Searching for " .. #terms .. " items in Auctionator."
 	elseif saved then
 		return "Saved as shopping list \"GearOrSkill\" in Auctionator. Open the auction house to search it."

@@ -419,29 +419,30 @@ function draw.Shop()
 	end)
 	local y = 48
 	text(0, y, 70, "Slot", C.dim)
-	local gainX, priceX, netX = INNER - 212, INNER - 140, INNER - 70
+	local gainX, priceX, netX = INNER - 240, INNER - 174, INNER - 86
 	local itemW = gainX - 74 - 2
 	text(74, y, itemW, "Item", C.dim)
-	text(gainX, y, 70, "Gain", C.dim, "RIGHT")
-	text(priceX, y, 68, "Price", C.dim, "RIGHT")
-	text(netX, y, 70, "Net cost", C.dim, "RIGHT")
+	text(gainX, y, 60, "Gain", C.dim, "RIGHT")
+	text(priceX, y, 84, "Price", C.dim, "RIGHT")
+	text(netX, y, 86, "Net cost", C.dim, "RIGHT")
 	rect(0, y + 16, INNER, 1, C.line)
 	y = y + 20
-	local shown, anyOld, anyUpTo, anyUnrated = {}, false, false, false
+	local shown, anyOld, anySuffix, anyUnrated = {}, false, false, false
 	for i = 1, math.min(MAX_SHOP, #rows) do
 		local row = rows[i]
 		shown[i] = row
-		anyOld, anyUpTo, anyUnrated = anyOld or row.old, anyUpTo or row.upTo, anyUnrated or row.unrated
-		if i % 2 == 0 then rect(-6, y - 2, INNER + 12, 30, C.stripe) end
+		anyOld, anySuffix, anyUnrated = anyOld or row.old, anySuffix or row.anySuffix, anyUnrated or row.unrated
+		if i % 2 == 0 then rect(-6, y - 3, INNER + 12, 22, C.stripe) end
+		local from = row.anySuffix and "from " or ""
 		text(0, y, 70, ns.SLOT_NAME[row.slot])
 		text(74, y, itemW, row.name .. (row.unrated and " *" or ""))
-		if row.upTo then text(74, y + 14, itemW, "best as \"" .. row.suffix .. "\"", C.dim, "LEFT", GameFontDisableSmall) end
-		text(gainX, y, 70, (row.upTo and "up to +" or "+") .. number(row.gain), C.ok, "RIGHT")
-		text(priceX, y, 68, money(row.price), row.old and C.dim or C.text, "RIGHT")
-		if row.old then text(priceX, y + 14, 68, "(old)", C.dim, "RIGHT", GameFontDisableSmall) end
-		local lost = not row.loss and "?" or row.loss == 0 and "free" or money(row.loss)
-		text(netX, y, 70, lost, not row.loss and C.dim or row.loss == 0 and C.ok or C.text, "RIGHT")
-		y = y + 30
+		text(gainX, y, 60, "+" .. number(row.gain), C.ok, "RIGHT")
+		text(priceX, y, 84, from .. money(row.price), row.old and C.dim or C.text, "RIGHT")
+		-- "free" only where the price is that of the very item; for a suffix it is a lower bound.
+		local free = row.loss == 0 and not row.anySuffix
+		local lost = not row.loss and "?" or free and "free" or (from .. money(row.loss))
+		text(netX, y, 86, lost, not row.loss and C.dim or free and C.ok or C.text, "RIGHT")
+		y = y + 22
 	end
 	y = y + 6
 	rect(0, y, 220, 24, C.line)
@@ -453,9 +454,9 @@ function draw.Shop()
 	y = y + 34
 	if shopNote then y = note(y, shopNote, C.text, GameFontHighlight) + 4 end
 	local notes = { "Net cost: the price minus what a vendor pays you for the item. ? means not loaded yet." }
-	if anyUpTo then notes[#notes + 1] = "up to: the gain with the suffix named under the item; other suffixes are worth less to you. The price is that of the cheapest suffix on sale, so pick the right one in Auctionator." end
+	if anySuffix then notes[#notes + 1] = "from: Auctionator stores one price for all suffixes of an item. This is the cheapest; the suffix named here may cost more. The search shows only that suffix, at its real price." end
 	if anyUnrated then notes[#notes + 1] = UNRATED_NOTE end
-	if anyOld then notes[#notes + 1] = "(old) the price is older than three days." end
+	if anyOld then notes[#notes + 1] = "A grey price is older than three days." end
 	for _, line in ipairs(notes) do y = note(y, line) end
 	return y
 end
